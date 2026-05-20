@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import MACDTrading from './screens/legacy/MACD'
-import BacktestUpload from './screens/BacktestUpload'
+import CSVUpload from './screens/CSVUpload'
 import Home from './screens/Home'
 import heartbeatService from './services/heartbeat'
 import { API_URL } from './config'
@@ -17,35 +17,35 @@ function App() {
   return (
     <>
       {activeTab === 'home' ? (
-        <Home onAnalyze={() => setActiveTab('backtest')} />
+        <Home onAnalyze={() => setActiveTab('csvupload')} />
       ) : (
-        <div className="app">
-          <nav className="flex flex-wrap gap-2 p-4 border-b border-gray-200">
+        <div className="app bg-[#0a0a0a] min-h-screen">
+          <nav className="flex flex-wrap gap-2 p-4 border-b border-zinc-800 bg-[#0a0a0a]">
             <button
               onClick={() => setActiveTab('home')}
-              className="px-4 py-2 rounded text-sm font-medium text-gray-600 hover:bg-gray-100"
+              className="px-4 py-2 rounded text-sm font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
             >
               Home
             </button>
             <button
-              onClick={() => setActiveTab('backtest')}
-              className={`px-4 py-2 rounded text-sm font-medium ${
-                activeTab === 'backtest' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              onClick={() => setActiveTab('csvupload')}
+              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                activeTab === 'csvupload' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
               }`}
             >
-              Backtest Upload
+              Upload Trades
             </button>
             <button
               onClick={() => setActiveTab('macd')}
-              className={`px-4 py-2 rounded text-sm font-medium ${
-                activeTab === 'macd' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                activeTab === 'macd' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
               }`}
             >
               MACD Strategy
             </button>
           </nav>
           <div className="content">
-            {activeTab === 'backtest' && <BacktestUpload />}
+            {activeTab === 'csvupload' && <CSVUpload />}
             {activeTab === 'macd' && <MACDTrading />}
           </div>
         </div>
