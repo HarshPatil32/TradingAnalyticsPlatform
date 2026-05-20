@@ -1,22 +1,12 @@
 // Upload screen: drag-and-drop or file picker plus paste, then calls /analyze-trades
 import { useState, useRef } from 'react'
-import { UploadCloud, FileText } from 'lucide-react'
+import { UploadCloud, FileText, ChevronDown } from 'lucide-react'
 import axios from 'axios'
 import { API_URL } from '../config'
-
-const FORMAT_EXAMPLE = `date, symbol, action, price, shares
-2024-01-15, AAPL, BUY, 185.50, 10
-2024-02-20, AAPL, SELL, 195.20, 10`
-
-const COLUMNS = [
-  { name: 'date', desc: 'Trade date (YYYY-MM-DD)' },
-  { name: 'symbol', desc: 'Stock ticker symbol' },
-  { name: 'action', desc: 'BUY or SELL' },
-  { name: 'price', desc: 'Price per share' },
-  { name: 'shares', desc: 'Number of shares' },
-]
+import { FORMAT_EXAMPLE, BROKER_STEPS, COLUMNS, validateFile } from './CSVUpload.constants'
 
 function ResultsPanel({ result }) {
+  if (!result || typeof result !== 'object') return null
   if (result.format === 'detailed') {
     const pnl = result.pnl ?? {}
     const totalPnl = pnl.total_pnl ?? 0
@@ -95,6 +85,7 @@ export default function CSVUpload() {
   const [file, setFile] = useState(null)
   const [pastedText, setPastedText] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [showBrokerGuide, setShowBrokerGuide] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
@@ -107,13 +98,9 @@ export default function CSVUpload() {
 
   function applyFile(selected) {
     if (!selected) return
-    const isCSV = selected.name.endsWith('.csv') || selected.type === 'text/csv'
-    if (!isCSV) {
-      setError('Only .csv files are supported.')
-      return
-    }
-    if (selected.size > 5 * 1024 * 1024) {
-      setError('File must be under 5 MB.')
+    const validationError = validateFile(selected)
+    if (validationError) {
+      setError(validationError)
       return
     }
     clearState()
@@ -167,8 +154,11 @@ export default function CSVUpload() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setResult(data)
+      setFile(null)
+      setPastedText('')
+      if (inputRef.current) inputRef.current.value = ''
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to process CSV.')
+      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to process CSV.')
     } finally {
       setLoading(false)
     }
@@ -253,10 +243,29 @@ export default function CSVUpload() {
                 ))}
               </ul>
             </div>
-            <p className="text-zinc-600 text-xs mt-auto">
-              Most broker platforms allow you to export your trade history as a CSV file.
-              Look for "Export trades" or "Download history" in your broker's platform.
-            </p>
+            <div className="border-t border-zinc-800 pt-4 mt-auto">
+              <button
+                onClick={() => setShowBrokerGuide(v => !v)}
+                className="flex items-center gap-2 text-zinc-400 text-sm hover:text-white transition-colors w-full text-left"
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${showBrokerGuide ? 'rotate-180' : ''}`} />
+                How to export from your broker
+              </button>
+              {showBrokerGuide && (
+                <div className="mt-3 space-y-4">
+                  {BROKER_STEPS.map(({ name, steps }) => (
+                    <div key={name}>
+                      <p className="text-white text-sm font-medium mb-1">{name}</p>
+                      <ol className="space-y-1 list-decimal pl-4">
+                        {steps.map((step) => (
+                          <li key={step} className="text-zinc-400 text-xs">{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
