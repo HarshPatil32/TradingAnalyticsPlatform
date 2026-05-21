@@ -99,7 +99,7 @@ export function ResultsPanel({ result }) {
   )
 }
 
-export default function CSVUpload() {
+export default function CSVUpload({ onResult }) {
   const [file, setFile] = useState(null)
   const [pastedText, setPastedText] = useState('')
   const [isDragging, setIsDragging] = useState(false)
@@ -178,6 +178,7 @@ export default function CSVUpload() {
       setFile(null)
       setPastedText('')
       if (inputRef.current) inputRef.current.value = ''
+      onResult?.(data)
     } catch (err) {
       if (!mountedRef.current) return
       const data = err.response?.data
