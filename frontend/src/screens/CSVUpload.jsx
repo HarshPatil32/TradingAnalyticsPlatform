@@ -1,6 +1,6 @@
 // Upload screen: drag-and-drop or file picker plus paste, then calls /analyze-trades
 import { useState, useRef } from 'react'
-import { UploadCloud, FileText, ChevronDown } from 'lucide-react'
+import { UploadCloud, FileText, ChevronDown, Download } from 'lucide-react'
 import axios from 'axios'
 import { API_URL } from '../config'
 import { FORMAT_EXAMPLE, BROKER_STEPS, COLUMNS, validateFile } from './CSVUpload.constants'
@@ -232,6 +232,15 @@ export default function CSVUpload() {
             <pre className="bg-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-300 whitespace-pre overflow-x-auto font-mono">
               {FORMAT_EXAMPLE}
             </pre>
+            <a
+              href="/example-trades.csv"
+              download="example-trades.csv"
+              aria-label="Download example trades CSV file"
+              className="flex items-center gap-2 text-zinc-400 text-sm hover:text-white transition-colors self-start"
+            >
+              <Download className="w-4 h-4" />
+              Download example file
+            </a>
             <div>
               <p className="text-zinc-400 text-sm font-medium mb-2">Column descriptions:</p>
               <ul className="space-y-1">
