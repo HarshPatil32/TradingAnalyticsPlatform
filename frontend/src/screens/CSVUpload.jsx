@@ -5,8 +5,23 @@ import axios from 'axios'
 import { API_URL } from '../config'
 import { FORMAT_EXAMPLE, BROKER_STEPS, COLUMNS, validateFile } from './CSVUpload.constants'
 
-function ResultsPanel({ result }) {
+export function ResultsPanel({ result }) {
   if (!result || typeof result !== 'object') return null
+
+  const warnings = Array.isArray(result.warnings) ? result.warnings : []
+  const notices = Array.isArray(result.notices) ? result.notices : []
+
+  const feedbackSection = (warnings.length > 0 || notices.length > 0) ? (
+    <div className="space-y-1 pt-3 border-t border-zinc-800">
+      {warnings.map((w, i) => (
+        w.message ? <p key={`w${i}`} className="text-yellow-400 text-sm">{w.message}</p> : null
+      ))}
+      {notices.map((n, i) => (
+        n.message ? <p key={`n${i}`} className="text-zinc-400 text-sm">{n.message}</p> : null
+      ))}
+    </div>
+  ) : null
+
   if (result.format === 'detailed') {
     const pnl = result.pnl ?? {}
     const totalPnl = pnl.total_pnl ?? 0
@@ -32,6 +47,7 @@ function ResultsPanel({ result }) {
         {result.trades?.length > 0 && (
           <p className="text-zinc-400 text-sm">{result.trades.length} trades analysed.</p>
         )}
+        {feedbackSection}
       </div>
     )
   }
@@ -69,14 +85,16 @@ function ResultsPanel({ result }) {
             <p className="text-xl font-bold text-white">{s.num_trades ?? 'N/A'}</p>
           </div>
         </div>
+        {feedbackSection}
       </div>
     )
   }
 
   return (
-    <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+    <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
       <p className="text-green-400 font-semibold">Analysis complete.</p>
       <pre className="text-zinc-400 text-xs mt-2 overflow-x-auto">{JSON.stringify(result, null, 2)}</pre>
+      {feedbackSection}
     </div>
   )
 }
@@ -158,7 +176,13 @@ export default function CSVUpload() {
       setPastedText('')
       if (inputRef.current) inputRef.current.value = ''
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to process CSV.')
+      const data = err.response?.data
+      const msg =
+        data?.error ||
+        data?.message ||
+        (Array.isArray(data?.errors) && data.errors[0]?.message) ||
+        'Failed to process CSV.'
+      setError(msg)
     } finally {
       setLoading(false)
     }

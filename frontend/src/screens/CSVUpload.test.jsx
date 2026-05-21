@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
 import { validateFile } from './CSVUpload.constants'
-import CSVUpload from './CSVUpload'
+import CSVUpload, { ResultsPanel } from './CSVUpload'
 
 function makeFile(name, type, size) {
   const file = new File([''], name, { type })
@@ -46,5 +46,86 @@ describe('CSVUpload component', () => {
     const link = screen.getByRole('link', { name: /download example/i })
     expect(link).toHaveAttribute('href', '/example-trades.csv')
     expect(link).toHaveAttribute('download', 'example-trades.csv')
+  })
+})
+
+describe('ResultsPanel', () => {
+  const baseDetailed = {
+    format: 'detailed',
+    pnl: { total_pnl: 100, total_return_pct: 5 },
+    trades: [{}],
+    warnings: [],
+    notices: [],
+  }
+
+  it('shows warning messages in yellow', () => {
+    const result = {
+      ...baseDetailed,
+      warnings: [{ type: 'duplicate', level: 'warning', message: 'Duplicate trade detected.' }],
+    }
+    render(<ResultsPanel result={result} />)
+    const msg = screen.getByText('Duplicate trade detected.')
+    expect(msg).toBeInTheDocument()
+    expect(msg).toHaveClass('text-yellow-400')
+  })
+
+  it('shows notice messages in zinc', () => {
+    const result = {
+      ...baseDetailed,
+      notices: [{ type: 'unclosed_position', level: 'info', message: 'Open position: AAPL BUY on 2024-01-15 (no matching SELL yet)' }],
+    }
+    render(<ResultsPanel result={result} />)
+    const msg = screen.getByText(/Open position/)
+    expect(msg).toBeInTheDocument()
+    expect(msg).toHaveClass('text-zinc-400')
+  })
+
+  it('shows no feedback section when there are no warnings or notices', () => {
+    render(<ResultsPanel result={baseDetailed} />)
+    expect(screen.queryByText(/duplicate/i)).not.toBeInTheDocument()
+  })
+
+  it('shows multiple warnings', () => {
+    const result = {
+      ...baseDetailed,
+      warnings: [
+        { type: 'duplicate', level: 'warning', message: 'First warning.' },
+        { type: 'unmatched_sell', level: 'warning', message: 'Second warning.' },
+      ],
+    }
+    render(<ResultsPanel result={result} />)
+    expect(screen.getByText('First warning.')).toBeInTheDocument()
+    expect(screen.getByText('Second warning.')).toBeInTheDocument()
+  })
+
+  it('shows warnings in summary format', () => {
+    const result = {
+      format: 'summary',
+      summary: { initial_capital: 1000, final_balance: 1100, win_rate: 0.6, num_trades: 5 },
+      warnings: [{ type: 'low_trades', level: 'warning', message: 'Too few trades for reliable conclusions.' }],
+      notices: [],
+    }
+    render(<ResultsPanel result={result} />)
+    expect(screen.getByText('Too few trades for reliable conclusions.')).toBeInTheDocument()
+  })
+
+  it('renders fallback for unknown format and still shows warnings', () => {
+    const result = {
+      format: 'unknown',
+      warnings: [{ type: 'test', level: 'warning', message: 'A fallback warning.' }],
+      notices: [],
+    }
+    render(<ResultsPanel result={result} />)
+    expect(screen.getByText(/Analysis complete/i)).toBeInTheDocument()
+    expect(screen.getByText('A fallback warning.')).toBeInTheDocument()
+  })
+
+  it('silently skips warning objects with no message', () => {
+    const result = {
+      ...baseDetailed,
+      warnings: [{ type: 'broken' }],
+    }
+    const { container } = render(<ResultsPanel result={result} />)
+    expect(container.querySelectorAll('.text-yellow-400')).toHaveLength(0)
   })
 })
