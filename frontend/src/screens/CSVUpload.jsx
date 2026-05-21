@@ -1,6 +1,6 @@
 // Upload screen: drag-and-drop or file picker plus paste, then calls /analyze-trades
-import { useState, useRef } from 'react'
-import { UploadCloud, FileText, ChevronDown, Download } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { UploadCloud, FileText, ChevronDown, Download, Loader2 } from 'lucide-react'
 import axios from 'axios'
 import { API_URL } from '../config'
 import { FORMAT_EXAMPLE, BROKER_STEPS, COLUMNS, validateFile } from './CSVUpload.constants'
@@ -108,6 +108,8 @@ export default function CSVUpload() {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const inputRef = useRef(null)
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   function clearState() {
     setError('')
@@ -171,11 +173,13 @@ export default function CSVUpload() {
       const { data } = await axios.post(`${API_URL}/analyze-trades`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
+      if (!mountedRef.current) return
       setResult(data)
       setFile(null)
       setPastedText('')
       if (inputRef.current) inputRef.current.value = ''
     } catch (err) {
+      if (!mountedRef.current) return
       const data = err.response?.data
       const msg =
         data?.error ||
@@ -184,7 +188,7 @@ export default function CSVUpload() {
         'Failed to process CSV.'
       setError(msg)
     } finally {
-      setLoading(false)
+      if (mountedRef.current) setLoading(false)
     }
   }
 
@@ -241,9 +245,15 @@ export default function CSVUpload() {
             <button
               onClick={handleAnalyze}
               disabled={loading || !hasInput}
+              aria-label={loading ? 'Analyzing trades, please wait' : 'Analyze Trades'}
               className="w-full py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {loading ? 'Analyzing...' : 'Analyze Trades'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  Analyzing...
+                </span>
+              ) : 'Analyze Trades'}
             </button>
           </div>
 

@@ -1,8 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
+import axios from 'axios'
 import { validateFile } from './CSVUpload.constants'
 import CSVUpload, { ResultsPanel } from './CSVUpload'
+
+vi.mock('axios', () => ({
+  default: { post: vi.fn() },
+}))
 
 function makeFile(name, type, size) {
   const file = new File([''], name, { type })
@@ -127,5 +132,53 @@ describe('ResultsPanel', () => {
     }
     const { container } = render(<ResultsPanel result={result} />)
     expect(container.querySelectorAll('.text-yellow-400')).toHaveLength(0)
+  })
+})
+
+describe('CSVUpload loading state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows a spinner while analyzing and hides it when done', async () => {
+    let resolvePost
+    axios.post.mockImplementation(() => new Promise(res => { resolvePost = res }))
+
+    render(<CSVUpload />)
+
+    fireEvent.change(screen.getByPlaceholderText(/paste csv data/i), {
+      target: { value: 'date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,185.50,10' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /analyze trades/i }))
+
+    expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /analyzing/i })).toBeDisabled()
+
+    await act(async () => {
+      resolvePost({ data: { format: 'detailed', pnl: { total_pnl: 0, total_return_pct: 0 }, trades: [], warnings: [], notices: [] } })
+    })
+
+    expect(document.querySelector('.animate-spin')).not.toBeInTheDocument()
+    // button label reverts even though it stays disabled (input was cleared on success)
+    expect(screen.getByRole('button', { name: /analyze trades/i })).toBeInTheDocument()
+  })
+
+  it('hides the spinner if the request fails', async () => {
+    axios.post.mockRejectedValue(new Error('Network error'))
+
+    render(<CSVUpload />)
+
+    fireEvent.change(screen.getByPlaceholderText(/paste csv data/i), {
+      target: { value: 'date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,185.50,10' },
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /analyze trades/i }))
+    })
+
+    expect(document.querySelector('.animate-spin')).not.toBeInTheDocument()
+    // input is preserved on error, so button re-enables
+    expect(screen.getByRole('button', { name: /analyze trades/i })).not.toBeDisabled()
   })
 })
