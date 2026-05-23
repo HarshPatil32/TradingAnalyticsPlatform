@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, NavLink, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import MACDTrading from './screens/legacy/MACD'
 import CSVUpload from './screens/CSVUpload'
 import TradeReport from './screens/TradeReport'
@@ -25,13 +25,27 @@ function MainLayout() {
   )
 }
 
+// Reads result from router location state (fresh upload) or sessionStorage (page refresh)
+function TradeReportRoute({ onBack }) {
+  const { state } = useLocation()
+  const result = state?.result ?? (() => {
+    try { return JSON.parse(sessionStorage.getItem('tradeReport')) ?? null } catch { return null }
+  })()
+  if (!result) return <Navigate to="/upload" replace />
+  return <TradeReport result={result} onBack={onBack} />
+}
+
 function AppRoutes() {
   const navigate = useNavigate()
-  const [reportResult, setReportResult] = useState(null)
 
   function handleResult(data) {
-    setReportResult(data)
-    navigate('/report')
+    try {
+      sessionStorage.setItem('tradeReport', JSON.stringify(data))
+    } catch {
+      // Storage unavailable (e.g. private mode quota) — result still travels via router state
+    }
+    // Pass data atomically with the navigation — no state/render race condition
+    navigate('/report', { state: { result: data } })
   }
 
   return (
@@ -41,11 +55,7 @@ function AppRoutes() {
         <Route path="/upload" element={<CSVUpload onResult={handleResult} />} />
         <Route
           path="/report"
-          element={
-            reportResult
-              ? <TradeReport result={reportResult} onBack={() => navigate('/upload')} />
-              : <Navigate to="/upload" replace />
-          }
+          element={<TradeReportRoute onBack={() => navigate('/upload')} />}
         />
         <Route path="/macd" element={<MACDTrading />} />
       </Route>

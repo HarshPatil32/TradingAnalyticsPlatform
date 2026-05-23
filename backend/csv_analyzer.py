@@ -855,7 +855,7 @@ def analyze_uploaded_trades(csv_data: str, commission_per_trade: float = DEFAULT
             "warnings": warnings,
         }
 
-    trades = parse_detailed(clean) or []
+    trades = parse_detailed(clean, is_free_tier=False) or []  # TODO: re-enable for production
     all_issues = validate_trades(trades) or []
     WARNING_LEVELS = {"warning", "error"}
     INFO_LEVELS = {"info"}

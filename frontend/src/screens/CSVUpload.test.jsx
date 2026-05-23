@@ -140,6 +140,30 @@ describe('CSVUpload loading state', () => {
     vi.clearAllMocks()
   })
 
+  it('calls onResult with the API response after a successful upload', async () => {
+    const mockData = {
+      format: 'detailed',
+      pnl: { total_pnl: 100, total_return_pct: 5 },
+      trades: [],
+      warnings: [],
+      notices: [],
+    }
+    axios.post.mockResolvedValue({ data: mockData })
+    const onResult = vi.fn()
+
+    render(<CSVUpload onResult={onResult} />)
+    fireEvent.change(screen.getByPlaceholderText(/paste csv data/i), {
+      target: { value: 'date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,185.50,10' },
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /analyze trades/i }))
+    })
+
+    expect(onResult).toHaveBeenCalledTimes(1)
+    expect(onResult).toHaveBeenCalledWith(mockData)
+  })
+
   it('shows a spinner while analyzing and hides it when done', async () => {
     let resolvePost
     axios.post.mockImplementation(() => new Promise(res => { resolvePost = res }))
