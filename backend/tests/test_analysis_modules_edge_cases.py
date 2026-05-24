@@ -131,9 +131,10 @@ class TestCalculateRealCostsEdgeCases:
         result = calculate_real_costs(ONE_TRADE_DETAILED, account_size=10_000)
         assert "adjusted_returns" in result
 
-    def test_one_trade_commissions_are_positive(self):
+    def test_one_trade_commissions_are_zero_by_default(self):
+        # Default is $0 commission (commission-free brokers)
         result = calculate_real_costs(ONE_TRADE_DETAILED, account_size=10_000)
-        assert result["commissions"]["total_commission_usd"] > 0
+        assert result["commissions"]["total_commission_usd"] == 0.0
 
     def test_negative_returns_returns_dict(self):
         result = calculate_real_costs(NEGATIVE_TRADE_DETAILED, account_size=10_000)

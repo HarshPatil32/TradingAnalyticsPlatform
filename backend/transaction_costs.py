@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # Default cost assumptions (all overridable via CostConfig)
 # ---------------------------------------------------------------------------
 
-DEFAULT_COMMISSION_PER_TRADE: float = 1.00   # Commission in USD per trade leg (each BUY or SELL)
+DEFAULT_COMMISSION_PER_TRADE: float = 0.00   # Commission in USD per trade leg — $0 for commission-free brokers (Robinhood, Webull, etc.)
 DEFAULT_SLIPPAGE_PCT: float = 0.008          # 0.8% per fill (round-trip = ×2)
 DEFAULT_SPREAD_PCT: float = 0.002            # 0.2% round-trip
 DEFAULT_SHORT_TERM_TAX_RATE: float = 0.37   # Federal max short-term CGT
@@ -83,8 +83,9 @@ def check_trade_count_sufficiency(closed_trade_count: int) -> dict | None:
 @dataclass
 class CostConfig:
     """
-    Holds all tunable cost parameters.  Defaults match a realistic
-    self-directed retail account (no-commission broker + hidden costs).
+    Holds all tunable cost parameters.  Defaults match a commission-free
+    retail broker (Robinhood, Webull, etc.) — hidden costs like slippage
+    and bid-ask spread still apply.
     """
     # Commissions
     commission_per_trade: float = DEFAULT_COMMISSION_PER_TRADE

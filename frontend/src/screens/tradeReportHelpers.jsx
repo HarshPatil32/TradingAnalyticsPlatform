@@ -74,6 +74,8 @@ export function computeMetrics(result) {
         (w.message && w.message.includes('reliable conclusions'))
     ) ?? null
 
+  const significance = result.significance ?? null
+
   const avgWinnerDays = pnl.avg_holding_days_winners ?? null
   const avgLoserDays = pnl.avg_holding_days_losers ?? null
   const dispositionRatio =
@@ -108,6 +110,7 @@ export function computeMetrics(result) {
     avgWinnerDays,
     avgLoserDays,
     dispositionRatio,
+    significance,
   }
 }
 
@@ -165,6 +168,10 @@ export function FlagIcon({ variant }) {
     info: {
       bg: 'bg-zinc-700',
       icon: <Info className="w-4 h-4 text-zinc-400" />,
+    },
+    success: {
+      bg: 'bg-green-500/20',
+      icon: <Info className="w-4 h-4 text-green-400" />,
     },
     blue: {
       bg: 'bg-blue-500/20',

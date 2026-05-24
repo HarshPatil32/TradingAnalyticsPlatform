@@ -3,6 +3,7 @@ import { Crown, ArrowLeft } from 'lucide-react'
 import { computeMetrics, fmtPct, fmtDate, StatCard } from './tradeReportHelpers'
 import BenchmarkComparison from './BenchmarkComparison'
 import BehavioralFlags from './BehavioralFlags'
+import EquityCurve from './EquityCurve'
 
 // computeMetrics is now in tradeReportHelpers.js — kept here as a re-export shim
 // so existing tests that import from this file continue to work.
@@ -20,6 +21,7 @@ export default function TradeReport({ result, onBack }) {
     winRate, spyReturn, qqqReturn,
     dispositionWarning, overtradingWarning, lowSampleWarning,
     avgWinnerDays, avgLoserDays, dispositionRatio,
+    significance,
   } = computeMetrics(result)
 
   const startLabel = fmtDate(startDate)
@@ -75,6 +77,8 @@ export default function TradeReport({ result, onBack }) {
           endLabel={endLabel}
         />
 
+        <EquityCurve equityCurve={result.pnl?.equity_curve} />
+
         {/* Behavioral Flags */}
         <h2 className="text-2xl font-bold text-white mb-4">
           What Your Trades Are Telling You
@@ -96,6 +100,7 @@ export default function TradeReport({ result, onBack }) {
           lowSampleWarning={lowSampleWarning}
           overtradingWarning={overtradingWarning}
           openCount={openCount}
+          significance={significance}
         />
 
         {/* Upgrade to Pro */}

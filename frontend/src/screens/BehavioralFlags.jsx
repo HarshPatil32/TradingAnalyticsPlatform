@@ -18,6 +18,7 @@ export default function BehavioralFlags({
   lowSampleWarning,
   overtradingWarning,
   openCount,
+  significance,
 }) {
   const hasCosts =
     commissionsPct !== 0 ||
@@ -131,6 +132,48 @@ export default function BehavioralFlags({
           </div>
         </div>
       )}
+
+      {/* Statistical significance */}
+      {significance && (() => {
+        const sharpe = significance.sharpe?.sharpe_ratio ?? null
+        const isPositiveSig = significance.verdict === 'SIGNIFICANT' && sharpe !== null && sharpe > 0
+        const isNegativeSig = significance.verdict === 'SIGNIFICANT' && (sharpe === null || sharpe <= 0)
+        const isInsufficient = significance.verdict === 'INSUFFICIENT_DATA'
+        const iconVariant = isPositiveSig ? 'success' : isInsufficient ? 'warning' : 'error'
+        const headline = isPositiveSig
+          ? 'Your edge looks statistically real'
+          : isNegativeSig
+          ? 'Your losses are statistically consistent, not just bad luck'
+          : isInsufficient
+          ? 'Not enough closed trades to judge your edge'
+          : 'No statistically proven edge yet'
+
+        return (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="flex gap-4">
+            <FlagIcon variant={iconVariant} />
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-white mb-1">{headline}</h3>
+              <p className="text-zinc-400 text-sm mb-3">{significance.summary}</p>
+              {significance.sharpe?.sharpe_ratio != null && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-zinc-500">Sharpe Ratio</span>
+                  <span
+                    className={
+                      significance.sharpe.sharpe_ratio > 0
+                        ? 'text-green-400 font-medium'
+                        : 'text-red-400 font-medium'
+                    }
+                  >
+                    {significance.sharpe.sharpe_ratio.toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        )
+      })()}
 
       {/* Open positions */}
       {openCount > 0 && (
