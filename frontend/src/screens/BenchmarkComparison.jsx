@@ -1,5 +1,6 @@
 // Benchmark comparison section for TradeReport
 import { BenchmarkCard, fmtPct } from './tradeReportHelpers'
+import BenchmarkBar from './BenchmarkBar'
 
 export default function BenchmarkComparison({
   netReturnPct,
@@ -33,6 +34,11 @@ export default function BenchmarkComparison({
           />
         )}
       </div>
+      <BenchmarkBar
+        userReturn={netReturnPct}
+        spyReturn={spyReturn}
+        qqqReturn={qqqReturn}
+      />
       {startLabel && endLabel && (
         <p className="text-zinc-500 text-sm mt-4">
           Same date range ({startLabel} - {endLabel}).{' '}
