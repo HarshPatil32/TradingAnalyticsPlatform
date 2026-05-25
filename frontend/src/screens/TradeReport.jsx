@@ -4,6 +4,7 @@ import { computeMetrics, fmtPct, fmtDate, StatCard } from './tradeReportHelpers'
 import BenchmarkComparison from './BenchmarkComparison'
 import BehavioralFlags from './BehavioralFlags'
 import EquityCurve from './EquityCurve'
+import CostBreakdown from './CostBreakdown'
 
 // computeMetrics is now in tradeReportHelpers.js — kept here as a re-export shim
 // so existing tests that import from this file continue to work.
@@ -75,6 +76,15 @@ export default function TradeReport({ result, onBack }) {
           qqqReturn={qqqReturn}
           startLabel={startLabel}
           endLabel={endLabel}
+        />
+
+        <CostBreakdown
+          grossReturnPct={grossReturnPct}
+          commissionsPct={commissionsPct}
+          slippagePct={slippagePct}
+          spreadPct={spreadPct}
+          taxPct={taxPct}
+          netReturnPct={netReturnPct}
         />
 
         <EquityCurve equityCurve={result.pnl?.equity_curve} />
