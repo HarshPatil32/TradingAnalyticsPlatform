@@ -17,6 +17,7 @@ export default function BehavioralFlags({
   numClosed,
   lowSampleWarning,
   overtradingWarning,
+  concentrationWarning,
   openCount,
   significance,
 }) {
@@ -25,6 +26,13 @@ export default function BehavioralFlags({
     slippagePct !== 0 ||
     spreadPct !== 0 ||
     taxPct !== 0
+
+  const concentrationStructured =
+    concentrationWarning != null &&
+    concentrationWarning.symbol != null &&
+    concentrationWarning.concentration_pct != null &&
+    concentrationWarning.trade_count != null &&
+    concentrationWarning.total_trades != null
 
   return (
     <div className="space-y-4 mb-6">
@@ -127,6 +135,27 @@ export default function BehavioralFlags({
               </p>
               <p className="text-yellow-400 text-sm font-medium">
                 Consider reducing trade frequency
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Concentration risk */}
+      {concentrationWarning && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="flex gap-4">
+            <FlagIcon variant="warning" />
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-white mb-1">
+                {concentrationStructured
+                  ? `${(concentrationWarning.concentration_pct * 100).toFixed(1)}% of your trades are in ${concentrationWarning.symbol}`
+                  : 'Your trades are heavily concentrated in one symbol'}
+              </h3>
+              <p className="text-zinc-400 text-sm leading-relaxed">
+                {concentrationStructured
+                  ? `You placed ${concentrationWarning.trade_count} of your ${concentrationWarning.total_trades} trades in ${concentrationWarning.symbol}. When more than half your activity is in a single stock, a bad outcome in that position can disproportionately hurt your overall results. Consider spreading trades across more symbols.`
+                  : (concentrationWarning.message ?? '')}
               </p>
             </div>
           </div>

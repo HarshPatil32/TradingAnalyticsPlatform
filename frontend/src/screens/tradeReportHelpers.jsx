@@ -67,6 +67,8 @@ export function computeMetrics(result) {
     warnings.find((w) => w.type === 'disposition_effect') ?? null
   const overtradingWarning =
     warnings.find((w) => w.type === 'overtrading') ?? null
+  const concentrationWarning =
+    warnings.find((w) => w.type === 'concentration_risk') ?? null
   const lowSampleWarning =
     warnings.find(
       (w) =>
@@ -106,6 +108,7 @@ export function computeMetrics(result) {
     qqqReturn,
     dispositionWarning,
     overtradingWarning,
+    concentrationWarning,
     lowSampleWarning,
     avgWinnerDays,
     avgLoserDays,

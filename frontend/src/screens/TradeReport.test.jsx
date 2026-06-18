@@ -37,7 +37,19 @@ describe('computeMetrics', () => {
     const metrics = computeMetrics(makeResult({ warnings: [] }))
     expect(metrics.dispositionWarning).toBeNull()
     expect(metrics.overtradingWarning).toBeNull()
+    expect(metrics.concentrationWarning).toBeNull()
     expect(metrics.lowSampleWarning).toBeNull()
+  })
+
+  it('extracts concentrationWarning from warnings', () => {
+    const warning = {
+      type: 'concentration_risk',
+      symbol: 'AAPL',
+      concentration_pct: 0.75,
+      message: '75% of trades in AAPL',
+    }
+    const metrics = computeMetrics(makeResult({ warnings: [warning] }))
+    expect(metrics.concentrationWarning).toEqual(warning)
   })
 
   it('handles empty notices array', () => {

@@ -20,7 +20,7 @@ export default function TradeReport({ result, onBack }) {
     numTrades, numClosed, openCount, startDate, endDate,
     grossReturnPct, netReturnPct, commissionsPct, slippagePct, spreadPct, taxPct, totalCostPct,
     winRate, spyReturn, qqqReturn,
-    dispositionWarning, overtradingWarning, lowSampleWarning,
+    dispositionWarning, overtradingWarning, concentrationWarning, lowSampleWarning,
     avgWinnerDays, avgLoserDays, dispositionRatio,
     significance,
   } = computeMetrics(result)
@@ -109,6 +109,7 @@ export default function TradeReport({ result, onBack }) {
           numClosed={numClosed}
           lowSampleWarning={lowSampleWarning}
           overtradingWarning={overtradingWarning}
+          concentrationWarning={concentrationWarning}
           openCount={openCount}
           significance={significance}
         />

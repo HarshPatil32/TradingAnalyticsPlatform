@@ -1,9 +1,19 @@
+# Web API
 Flask==2.3.3
 Flask-CORS==4.0.0
 python-dotenv==1.0.0
-yfinance>=1.0.0
+gunicorn>=21.2.0
+requests>=2.31.0
+
+# Data & analysis
 numpy>=1.26.0
 pandas>=2.1.0
 scikit-learn>=1.3.0
-requests>=2.31.0
-gunicorn>=21.2.0
+scipy>=1.11.0
+yfinance>=1.0.0
+
+# Testing
+pytest>=8.0.0
+
+# Optional legacy MACD support (falls back to pandas if install fails):
+# TA-Lib-binary==0.4.28
