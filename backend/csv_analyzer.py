@@ -577,11 +577,16 @@ def calculate_pnl(trades: list[dict]) -> dict:
                 "cumulative_pnl": round(cumulative_pnl, 4),
             })
 
-    # Equity curve: cumulative P&L at each sell event (chronological order)
-    equity_curve = [
-        {"date": t["sell_date"], "cumulative_pnl": t["cumulative_pnl"]}
-        for t in trade_pnl
-    ]
+    # Equity curve: cumulative P&L at each sell event in chronological order.
+    # trade_pnl follows CSV row order; sort by close date so the chart reads left-to-right.
+    running_pnl = 0.0
+    equity_curve = []
+    for t in sorted(trade_pnl, key=lambda row: row["sell_date"]):
+        running_pnl += t["pnl"]
+        equity_curve.append({
+            "date": t["sell_date"],
+            "cumulative_pnl": round(running_pnl, 4),
+        })
 
     # Total return as a percentage of total capital deployed (sum of all buy costs)
     total_buy_cost = sum(

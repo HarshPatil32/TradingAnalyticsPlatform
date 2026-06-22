@@ -1,5 +1,6 @@
 // Behavioral flag cards shown in the trade report
 import { FlagIcon, CostRow, fmtPct } from './tradeReportHelpers'
+import WinRateCard from './WinRateCard'
 
 export default function BehavioralFlags({
   dispositionWarning,
@@ -91,35 +92,12 @@ export default function BehavioralFlags({
         </div>
       )}
 
-      {/* Win rate */}
-      {winRate != null && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <div className="flex gap-4">
-            <FlagIcon variant="info" />
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-white mb-1">
-                Win rate: {fmtPct(winRate)}
-              </h3>
-              <p className="text-zinc-400 text-sm mb-2">
-                {winRate > 50
-                  ? `Just over half your trades were profitable.`
-                  : winRate === 50
-                  ? `Exactly half your trades were profitable.`
-                  : `Under half your trades were profitable.`}{' '}
-                With {numClosed} trades in your sample,{' '}
-                {numClosed < 100
-                  ? "this is approaching statistical significance, but you'd need at least 100 trades to confidently say whether this represents a real edge or just luck."
-                  : 'this is a statistically meaningful sample size.'}
-              </p>
-              {lowSampleWarning && (
-                <p className="text-zinc-500 text-sm italic">
-                  Not enough data yet to call this a proven strategy
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <WinRateCard
+        winRate={winRate}
+        numClosed={numClosed}
+        lowSampleWarning={lowSampleWarning}
+        significance={significance}
+      />
 
       {/* Overtrading */}
       {overtradingWarning && (

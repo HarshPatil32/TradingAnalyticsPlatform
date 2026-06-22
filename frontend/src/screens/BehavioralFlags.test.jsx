@@ -99,7 +99,9 @@ describe('BehavioralFlags', () => {
         lowSampleWarning={{ type: 'insufficient_data', message: 'Low sample' }}
       />
     )
-    expect(screen.getByText('Win rate: +45.0%')).toBeInTheDocument()
+    expect(screen.getByText('Win rate')).toBeInTheDocument()
+    expect(screen.getByText('45.0%')).toBeInTheDocument()
+    expect(screen.getByText('Insufficient sample')).toBeInTheDocument()
     expect(
       screen.getByText(/Not enough data yet to call this a proven strategy/)
     ).toBeInTheDocument()

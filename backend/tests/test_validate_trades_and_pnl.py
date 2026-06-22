@@ -362,6 +362,20 @@ class TestCalculatePnl:
         assert result["total_pnl"] == 200.0
         assert result["equity_curve"][-1]["cumulative_pnl"] == 200.0
 
+    def test_equity_curve_is_chronological_when_sells_are_out_of_order(self):
+        # CSV has valid BUY->SELL pairing but sell rows are not chronological.
+        trades = [
+            _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
+            _trade("2024-02-01", "MSFT", "BUY", 200.0, 5),
+            _trade("2024-04-01", "MSFT", "SELL", 220.0, 5),   # +100, later close
+            _trade("2024-03-01", "AAPL", "SELL", 110.0, 10),  # +100, earlier close
+        ]
+        result = calculate_pnl(trades)
+        dates = [point["date"] for point in result["equity_curve"]]
+        assert dates == ["2024-03-01", "2024-04-01"]
+        assert result["equity_curve"][0]["cumulative_pnl"] == 100.0
+        assert result["equity_curve"][1]["cumulative_pnl"] == 200.0
+
     def test_result_is_float_or_none(self):
         trades = [
             _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),

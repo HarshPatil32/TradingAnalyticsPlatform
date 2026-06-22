@@ -7,6 +7,12 @@ export function fmtPct(val, decimals = 1) {
   return `${sign}${Number(val).toFixed(decimals)}%`
 }
 
+// Absolute rate (e.g. win rate) — no +/- sign; not a return delta.
+export function fmtRate(val, decimals = 1) {
+  if (val == null || isNaN(val)) return 'N/A'
+  return `${Number(val).toFixed(decimals)}%`
+}
+
 export function fmtDate(dateStr) {
   if (!dateStr) return null
   try {
