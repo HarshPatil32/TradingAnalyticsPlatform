@@ -146,6 +146,32 @@ class TestAllowedOriginsParsing:
         assert "ALLOWED_ORIGINS" not in result["missing_optional"]
 
 
+class TestBuildCorsOrigins:
+    def test_wildcard_passthrough(self):
+        from app import _build_cors_origins
+        assert _build_cors_origins("*") == "*"
+
+    def test_vercel_production_adds_preview_regex(self):
+        from app import _build_cors_origins
+        result = _build_cors_origins(["https://optimized-macd-proj.vercel.app"])
+        assert result[0] == "https://optimized-macd-proj.vercel.app"
+        preview_pattern = result[1]
+        assert preview_pattern.search(
+            "https://optimized-macd-proj-fbg5rpn4p-harsh-patils-projects-b8fb0f7c.vercel.app"
+        )
+        assert preview_pattern.search("https://optimized-macd-proj.vercel.app")
+        assert not preview_pattern.search("https://other-project.vercel.app")
+
+    def test_explicit_wildcard_pattern(self):
+        from app import _build_cors_origins
+        result = _build_cors_origins(["https://*.vercel.app"])
+        pattern = result[1]
+        assert pattern.search("https://optimized-macd-proj.vercel.app")
+        assert pattern.search(
+            "https://optimized-macd-proj-fbg5rpn4p-harsh-patils-projects-b8fb0f7c.vercel.app"
+        )
+
+
 class TestHealthCheckEnvStatus:
     @pytest.fixture(scope="class")
     def client(self):

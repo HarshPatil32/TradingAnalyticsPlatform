@@ -3,6 +3,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import logging
 import os
+import re
 from datetime import datetime, timezone
 import requests
 import json
@@ -85,7 +86,33 @@ def _parse_allowed_origins() -> "str | list[str]":
 
     return origins if origins else "*"
 
+
+def _build_cors_origins(parsed: "str | list[str]"):
+    """Expand parsed ALLOWED_ORIGINS for Flask-CORS (supports Vercel preview deploys)."""
+    if parsed == "*":
+        return "*"
+
+    cors_origins: list = list(parsed)
+
+    for origin in parsed:
+        if origin.startswith(("http://", "https://")) and "*" in origin:
+            scheme, rest = origin.split("://", 1)
+            regex_body = re.escape(rest).replace(r"\*", ".*")
+            cors_origins.append(re.compile(rf"^{scheme}://{regex_body}$"))
+            continue
+
+        match = re.match(r"^(https://)([^./]+)\.vercel\.app$", origin)
+        if match:
+            scheme, slug = match.group(1), match.group(2)
+            cors_origins.append(
+                re.compile(rf"^{scheme}{re.escape(slug)}(-[a-zA-Z0-9-]+)*\.vercel\.app$")
+            )
+
+    return cors_origins
+
+
 ALLOWED_ORIGINS = _parse_allowed_origins()
+CORS_ORIGINS = _build_cors_origins(ALLOWED_ORIGINS)
 
 # Strict policy for a JSON-only API. Expand this if HTML routes are added.
 CSP_POLICY = "default-src 'none'; frame-ancestors 'none'; base-uri 'self'"
@@ -151,7 +178,7 @@ app.config['MAX_CONTENT_LENGTH'] = _MAX_UPLOAD_BYTES
 
 CORS(app, resources={
     r"/*": {
-        "origins": ALLOWED_ORIGINS,
+        "origins": CORS_ORIGINS,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": False
