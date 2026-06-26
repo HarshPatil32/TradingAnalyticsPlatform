@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import MACDTrading from './screens/legacy/MACD'
 import CSVUpload from './screens/CSVUpload'
 import TradeReport from './screens/TradeReport'
 import Home from './screens/Home'
@@ -18,7 +17,6 @@ function MainLayout() {
       <nav className="flex flex-wrap gap-2 p-4 border-b border-zinc-800 bg-[#0a0a0a]">
         <NavLink to="/" end className={navLinkClass}>Home</NavLink>
         <NavLink to="/upload" className={navLinkClass}>Upload Trades</NavLink>
-        <NavLink to="/macd" className={navLinkClass}>MACD Strategy</NavLink>
       </nav>
       <Outlet />
     </div>
@@ -72,7 +70,6 @@ function AppRoutes() {
             />
           }
         />
-        <Route path="/macd" element={<MACDTrading />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
