@@ -513,6 +513,10 @@ def validate_trades(trades: list[dict]) -> list[dict]:
                 "type": "unclosed_position",
                 "level": "info",
                 "message": f"Open position: {symbol} BUY on {date} (no matching SELL yet)",
+                "symbol": symbol,
+                "date": date,
+                "price": buy.get("price"),
+                "shares": buy.get("shares"),
             })
 
     # Check for zero or negative price or share count, or missing/invalid values

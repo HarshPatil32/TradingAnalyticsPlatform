@@ -17,7 +17,7 @@ export default function TradeReport({ result, onBack }) {
   }
 
   const {
-    numTrades, numClosed, openCount, startDate, endDate,
+    numTrades, numClosed, openCount, openPositions, startDate, endDate,
     grossReturnPct, netReturnPct, commissionsPct, slippagePct, spreadPct, taxPct, totalCostPct,
     winRate, spyReturn, qqqReturn,
     dispositionWarning, overtradingWarning, concentrationWarning, lowSampleWarning,
@@ -111,6 +111,7 @@ export default function TradeReport({ result, onBack }) {
           overtradingWarning={overtradingWarning}
           concentrationWarning={concentrationWarning}
           openCount={openCount}
+          openPositions={openPositions}
           significance={significance}
         />
 

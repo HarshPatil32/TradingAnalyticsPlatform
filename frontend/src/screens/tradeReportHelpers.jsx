@@ -15,13 +15,11 @@ export function fmtRate(val, decimals = 1) {
 
 export function fmtDate(dateStr) {
   if (!dateStr) return null
-  try {
-    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-    })
-  } catch {
-    return dateStr
-  }
+  const parsed = new Date(dateStr + 'T00:00:00')
+  if (Number.isNaN(parsed.getTime())) return dateStr
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  })
 }
 
 export function computeMetrics(result) {
@@ -91,15 +89,16 @@ export function computeMetrics(result) {
       ? avgLoserDays / avgWinnerDays
       : null
 
-  // Notices are info-level items; filter specifically for unclosed positions
-  const openCount = (result.notices ?? []).filter(
+  const openPositions = (result.notices ?? []).filter(
     (n) => n.type === 'unclosed_position'
-  ).length
+  )
+  const openCount = openPositions.length
 
   return {
     numTrades: trades.length,
     numClosed,
     openCount,
+    openPositions,
     startDate,
     endDate,
     grossReturnPct,

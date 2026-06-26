@@ -1,5 +1,7 @@
 // Behavioral flag cards shown in the trade report
-import { FlagIcon, CostRow, fmtPct } from './tradeReportHelpers'
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { FlagIcon, CostRow, fmtPct, fmtDate } from './tradeReportHelpers'
 import WinRateCard from './WinRateCard'
 
 export default function BehavioralFlags({
@@ -20,6 +22,7 @@ export default function BehavioralFlags({
   overtradingWarning,
   concentrationWarning,
   openCount,
+  openPositions = [],
   significance,
 }) {
   const hasCosts =
@@ -27,6 +30,9 @@ export default function BehavioralFlags({
     slippagePct !== 0 ||
     spreadPct !== 0 ||
     taxPct !== 0
+
+  const openPositionsWithSymbol = openPositions.filter((p) => p.symbol)
+  const [showOpenPositions, setShowOpenPositions] = useState(false)
 
   const concentrationStructured =
     concentrationWarning != null &&
@@ -199,6 +205,40 @@ export default function BehavioralFlags({
                 {openCount === 1 ? 'this position' : 'these positions'} to avoid the
                 disposition effect.
               </p>
+              {openPositionsWithSymbol.length > 0 && (
+                <div className="mt-4 border-t border-zinc-800 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowOpenPositions((v) => !v)}
+                    aria-expanded={showOpenPositions}
+                    className="flex items-center gap-2 text-zinc-400 text-sm hover:text-white transition-colors"
+                  >
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform ${showOpenPositions ? 'rotate-180' : ''}`}
+                    />
+                    {showOpenPositions ? 'Hide' : 'Show'} {openPositionsWithSymbol.length} open{' '}
+                    {openPositionsWithSymbol.length === 1 ? 'position' : 'positions'}
+                  </button>
+                  {showOpenPositions && (
+                    <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
+                      {openPositionsWithSymbol.map((pos, i) => (
+                        <div key={i} className="flex justify-between items-center text-sm gap-4">
+                          <span className="font-medium text-white">{pos.symbol}</span>
+                          <span className="text-zinc-400">{fmtDate(pos.date)}</span>
+                          {pos.shares != null && (
+                            <span className="text-zinc-400">{pos.shares} shares</span>
+                          )}
+                          {pos.price != null && (
+                            <span className="text-zinc-400">
+                              @ ${Number(pos.price).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

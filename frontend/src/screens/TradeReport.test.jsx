@@ -67,6 +67,19 @@ describe('computeMetrics', () => {
     expect(metrics.openCount).toBe(1)
   })
 
+  it('returns openPositions array from unclosed_position notices', () => {
+    const notice = {
+      type: 'unclosed_position',
+      symbol: 'AAPL',
+      date: '2024-01-15',
+      price: 150.0,
+      shares: 10,
+    }
+    const metrics = computeMetrics(makeResult({ notices: [notice] }))
+    expect(metrics.openCount).toBe(1)
+    expect(metrics.openPositions).toEqual([notice])
+  })
+
   it('does not apply tax when grossPnlUsd < 10', () => {
     const metrics = computeMetrics(makeResult({
       pnl: { trade_pnl: [], total_pnl: 5, total_return_pct: 5 },
@@ -99,9 +112,8 @@ describe('fmtDate', () => {
   })
 
   it('returns the original string for a malformed date', () => {
-    const result = fmtDate('not-a-date')
-    expect(typeof result).toBe('string')
-    expect(result.length).toBeGreaterThan(0)
+    expect(fmtDate('not-a-date')).toBe('not-a-date')
+    expect(fmtDate('unknown date')).toBe('unknown date')
   })
 })
 

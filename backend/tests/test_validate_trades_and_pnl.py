@@ -179,6 +179,44 @@ class TestValidateTrades:
         assert "TSLA" in unclosed[0]["message"]
         assert "2024-01-15" in unclosed[0]["message"]
 
+    def test_unclosed_position_has_structured_fields(self):
+        trades = [_trade("2024-01-15", "AAPL", "BUY", 150.0, 10)]
+        items = validate_trades(trades)
+        unclosed = [i for i in items if i["type"] == "unclosed_position"]
+        assert len(unclosed) == 1
+        notice = unclosed[0]
+        assert notice["symbol"] == "AAPL"
+        assert notice["date"] == "2024-01-15"
+        assert notice["price"] == 150.0
+        assert notice["shares"] == 10
+
+    def test_multiple_unclosed_positions_have_structured_fields(self):
+        trades = [
+            _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
+            _trade("2024-01-02", "MSFT", "BUY", 200.0, 5),
+        ]
+        items = validate_trades(trades)
+        unclosed = [i for i in items if i["type"] == "unclosed_position"]
+        assert len(unclosed) == 2
+        by_symbol = {n["symbol"]: n for n in unclosed}
+        assert by_symbol["AAPL"]["date"] == "2024-01-01"
+        assert by_symbol["AAPL"]["price"] == 100.0
+        assert by_symbol["AAPL"]["shares"] == 10
+        assert by_symbol["MSFT"]["date"] == "2024-01-02"
+        assert by_symbol["MSFT"]["price"] == 200.0
+        assert by_symbol["MSFT"]["shares"] == 5
+
+    def test_analyze_uploaded_trades_unclosed_position_has_structured_fields(self):
+        from csv_analyzer import analyze_uploaded_trades
+        csv = "date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,150,10\n"
+        result = analyze_uploaded_trades(csv)
+        assert len(result["notices"]) == 1
+        notice = result["notices"][0]
+        assert notice["type"] == "unclosed_position"
+        assert notice["symbol"] == "AAPL"
+        assert notice["price"] == 150.0
+        assert notice["shares"] == 10
+
     def test_multiple_symbols_paired_independently(self):
         trades = [
             _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),

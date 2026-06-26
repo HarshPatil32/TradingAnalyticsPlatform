@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import BehavioralFlags from './BehavioralFlags'
 
 const baseProps = {
@@ -267,5 +267,87 @@ describe('BehavioralFlags', () => {
     render(<BehavioralFlags {...baseProps} openCount={1} />)
     expect(screen.getByText('1 open position')).toBeInTheDocument()
     expect(screen.getByText(/hasn't been closed yet/)).toBeInTheDocument()
+  })
+
+  it('renders position list when openPositions have structured data', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        openCount={1}
+        openPositions={[
+          {
+            type: 'unclosed_position',
+            symbol: 'AAPL',
+            date: '2024-01-15',
+            price: 150.0,
+            shares: 10,
+          },
+        ]}
+      />
+    )
+    expect(screen.queryByText('AAPL')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /show 1 open position/i }))
+    expect(screen.getByText('AAPL')).toBeInTheDocument()
+    expect(screen.getByText('Jan 15, 2024')).toBeInTheDocument()
+    expect(screen.getByText('10 shares')).toBeInTheDocument()
+    expect(screen.getByText('@ $150.00')).toBeInTheDocument()
+  })
+
+  it('hides position list again when dropdown is collapsed', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        openCount={1}
+        openPositions={[
+          {
+            type: 'unclosed_position',
+            symbol: 'AAPL',
+            date: '2024-01-15',
+            price: 150.0,
+            shares: 10,
+          },
+        ]}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /show 1 open position/i }))
+    expect(screen.getByText('AAPL')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /hide 1 open position/i }))
+    expect(screen.queryByText('AAPL')).not.toBeInTheDocument()
+  })
+
+  it('omits position list when openPositions lack symbol field', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        openCount={1}
+        openPositions={[
+          { type: 'unclosed_position', message: 'Open position: AAPL BUY on 2024-01-15' },
+        ]}
+      />
+    )
+    expect(screen.getByText('1 open position')).toBeInTheDocument()
+    expect(screen.queryByText('shares')).not.toBeInTheDocument()
+  })
+
+  it('renders only openPositions that have a symbol field', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        openCount={2}
+        openPositions={[
+          {
+            type: 'unclosed_position',
+            symbol: 'AAPL',
+            date: '2024-01-15',
+            price: 150.0,
+            shares: 10,
+          },
+          { type: 'unclosed_position', message: 'Open position: MSFT BUY on 2024-01-16' },
+        ]}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /show 1 open position/i }))
+    expect(screen.getByText('AAPL')).toBeInTheDocument()
+    expect(screen.queryByText('MSFT')).not.toBeInTheDocument()
   })
 })
