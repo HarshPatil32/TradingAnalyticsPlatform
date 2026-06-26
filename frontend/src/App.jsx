@@ -26,13 +26,21 @@ function MainLayout() {
 }
 
 // Reads result from router location state (fresh upload) or sessionStorage (page refresh)
-function TradeReportRoute({ onBack }) {
+function TradeReportRoute({ onBack, onUpgrade }) {
   const { state } = useLocation()
   const result = state?.result ?? (() => {
     try { return JSON.parse(sessionStorage.getItem('tradeReport')) ?? null } catch { return null }
   })()
   if (!result) return <Navigate to="/upload" replace />
-  return <TradeReport result={result} onBack={onBack} />
+  // TODO: derive isPro from a verified auth session; enforce Pro features server-side too.
+  return (
+    <TradeReport
+      result={result}
+      onBack={onBack}
+      isPro={false}
+      onUpgrade={onUpgrade}
+    />
+  )
 }
 
 function AppRoutes() {
@@ -55,7 +63,14 @@ function AppRoutes() {
         <Route path="/upload" element={<CSVUpload onResult={handleResult} />} />
         <Route
           path="/report"
-          element={<TradeReportRoute onBack={() => navigate('/upload')} />}
+          element={
+            <TradeReportRoute
+              onBack={() => navigate('/upload')}
+              onUpgrade={() => {
+                // Placeholder until billing is integrated.
+              }}
+            />
+          }
         />
         <Route path="/macd" element={<MACDTrading />} />
       </Route>

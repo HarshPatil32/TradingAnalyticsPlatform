@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { computeMetrics, fmtDate } from './tradeReportHelpers'
 import TradeReport from './TradeReport'
 
@@ -144,5 +144,41 @@ describe('TradeReport', () => {
     })
     render(<TradeReport result={result} onBack={vi.fn()} />)
     expect(screen.getByText(/Benchmark Comparison/i)).toBeInTheDocument()
+  })
+
+  it('renders the upgrade block when isPro is false', () => {
+    render(<TradeReport result={makeResult()} onBack={vi.fn()} isPro={false} />)
+    expect(screen.getByText('Upgrade to Pro')).toBeInTheDocument()
+    expect(screen.getByText('Upgrade Now')).toBeInTheDocument()
+  })
+
+  it('hides the upgrade block when isPro is true', () => {
+    render(<TradeReport result={makeResult()} onBack={vi.fn()} isPro />)
+    expect(screen.queryByText('Upgrade to Pro')).not.toBeInTheDocument()
+    expect(screen.queryByText('Upgrade Now')).not.toBeInTheDocument()
+  })
+
+  it('calls onUpgrade when Upgrade Now is clicked', () => {
+    const onUpgrade = vi.fn()
+    render(
+      <TradeReport result={makeResult()} onBack={vi.fn()} isPro={false} onUpgrade={onUpgrade} />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade Now' }))
+    expect(onUpgrade).toHaveBeenCalledTimes(1)
+  })
+
+  it('dismisses the upgrade block when Save These Results is clicked', () => {
+    const onSaveResults = vi.fn()
+    render(
+      <TradeReport
+        result={makeResult()}
+        onBack={vi.fn()}
+        isPro={false}
+        onSaveResults={onSaveResults}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save These Results (Free)' }))
+    expect(onSaveResults).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Upgrade to Pro')).not.toBeInTheDocument()
   })
 })

@@ -221,8 +221,11 @@ export default function BehavioralFlags({
                   </button>
                   {showOpenPositions && (
                     <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
-                      {openPositionsWithSymbol.map((pos, i) => (
-                        <div key={i} className="flex justify-between items-center text-sm gap-4">
+                      {openPositionsWithSymbol.map((pos) => (
+                        <div
+                          key={`${pos.symbol}-${pos.date ?? ''}`}
+                          className="flex justify-between items-center text-sm gap-4"
+                        >
                           <span className="font-medium text-white">{pos.symbol}</span>
                           <span className="text-zinc-400">{fmtDate(pos.date)}</span>
                           {pos.shares != null && (

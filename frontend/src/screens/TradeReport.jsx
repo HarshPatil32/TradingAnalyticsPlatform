@@ -1,4 +1,5 @@
 // Full trade analysis report shown after CSV upload
+import { useState } from 'react'
 import { Crown, ArrowLeft } from 'lucide-react'
 import { computeMetrics, fmtPct, fmtDate, StatCard } from './tradeReportHelpers'
 import BenchmarkComparison from './BenchmarkComparison'
@@ -10,7 +11,8 @@ import CostBreakdown from './CostBreakdown'
 // so existing tests that import from this file continue to work.
 export { computeMetrics, fmtDate }
 
-export default function TradeReport({ result, onBack }) {
+export default function TradeReport({ result, onBack, isPro = false, onUpgrade, onSaveResults }) {
+  const [upgradeDismissed, setUpgradeDismissed] = useState(false)
   if (!result) {
     onBack?.()
     return null
@@ -115,49 +117,61 @@ export default function TradeReport({ result, onBack }) {
           significance={significance}
         />
 
-        {/* Upgrade to Pro */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
-          <div className="flex items-center gap-2 mb-2">
-            <Crown className="w-5 h-5 text-yellow-400" />
-            <h2 className="text-xl font-bold text-white">Upgrade to Pro</h2>
+        {!isPro && !upgradeDismissed && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
+            <div className="flex items-center gap-2 mb-2">
+              <Crown className="w-5 h-5 text-yellow-400" />
+              <h2 className="text-xl font-bold text-white">Upgrade to Pro</h2>
+            </div>
+            <p className="text-zinc-400 text-sm mb-6">
+              Get the complete picture of your trading behavior and unlock deeper insights
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              {[
+                {
+                  title: 'Full behavioral breakdown',
+                  desc: 'Detailed analysis of all cognitive biases affecting your trades',
+                },
+                {
+                  title: 'Per-stock performance',
+                  desc: 'See which tickers you actually make money on vs. which ones lose',
+                },
+                {
+                  title: 'Monthly trend tracking',
+                  desc: "Track whether you're improving over time or repeating mistakes",
+                },
+                {
+                  title: 'Custom alerts',
+                  desc: "Get notified when you're falling into bad trading patterns",
+                },
+              ].map(({ title, desc }) => (
+                <div key={title}>
+                  <p className="text-white text-sm font-semibold mb-0.5">{title}</p>
+                  <p className="text-zinc-400 text-sm">{desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onUpgrade?.()}
+                className="px-6 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-100 transition-colors text-sm"
+              >
+                Upgrade Now
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSaveResults?.()
+                  setUpgradeDismissed(true)
+                }}
+                className="px-6 py-3 bg-zinc-800 text-white font-semibold rounded-xl hover:bg-zinc-700 transition-colors text-sm border border-zinc-700"
+              >
+                Save These Results (Free)
+              </button>
+            </div>
           </div>
-          <p className="text-zinc-400 text-sm mb-6">
-            Get the complete picture of your trading behavior and unlock deeper insights
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            {[
-              {
-                title: 'Full behavioral breakdown',
-                desc: 'Detailed analysis of all cognitive biases affecting your trades',
-              },
-              {
-                title: 'Per-stock performance',
-                desc: 'See which tickers you actually make money on vs. which ones lose',
-              },
-              {
-                title: 'Monthly trend tracking',
-                desc: "Track whether you're improving over time or repeating mistakes",
-              },
-              {
-                title: 'Custom alerts',
-                desc: "Get notified when you're falling into bad trading patterns",
-              },
-            ].map(({ title, desc }) => (
-              <div key={title}>
-                <p className="text-white text-sm font-semibold mb-0.5">{title}</p>
-                <p className="text-zinc-400 text-sm">{desc}</p>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button className="px-6 py-3 bg-white text-black font-semibold rounded-xl hover:bg-zinc-100 transition-colors text-sm">
-              Upgrade Now
-            </button>
-            <button className="px-6 py-3 bg-zinc-800 text-white font-semibold rounded-xl hover:bg-zinc-700 transition-colors text-sm border border-zinc-700">
-              Save These Results (Free)
-            </button>
-          </div>
-        </div>
+        )}
 
       </div>
     </div>
