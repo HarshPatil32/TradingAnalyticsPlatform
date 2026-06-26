@@ -99,7 +99,7 @@ export function ResultsPanel({ result }) {
   )
 }
 
-export default function CSVUpload() {
+export default function CSVUpload({ onResult }) {
   const [file, setFile] = useState(null)
   const [pastedText, setPastedText] = useState('')
   const [isDragging, setIsDragging] = useState(false)
@@ -109,7 +109,10 @@ export default function CSVUpload() {
   const [result, setResult] = useState(null)
   const inputRef = useRef(null)
   const mountedRef = useRef(true)
-  useEffect(() => () => { mountedRef.current = false }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   function clearState() {
     setError('')
@@ -172,20 +175,30 @@ export default function CSVUpload() {
     try {
       const { data } = await axios.post(`${API_URL}/analyze-trades`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
       })
+      console.log('analyze-trades response received', data)
       if (!mountedRef.current) return
-      setResult(data)
       setFile(null)
       setPastedText('')
       if (inputRef.current) inputRef.current.value = ''
+      // When a result callback is provided the parent navigates immediately,
+      // so skip setting local state (ResultsPanel would never render anyway).
+      if (onResult) {
+        onResult(data)
+      } else {
+        setResult(data)
+      }
     } catch (err) {
       if (!mountedRef.current) return
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout')
       const data = err.response?.data
-      const msg =
-        data?.error ||
-        data?.message ||
-        (Array.isArray(data?.errors) && data.errors[0]?.message) ||
-        'Failed to process CSV.'
+      const msg = isTimeout
+        ? 'Analysis is taking too long. Please try again.'
+        : data?.error ||
+          data?.message ||
+          (Array.isArray(data?.errors) && data.errors[0]?.message) ||
+          'Failed to process CSV.'
       setError(msg)
     } finally {
       if (mountedRef.current) setLoading(false)

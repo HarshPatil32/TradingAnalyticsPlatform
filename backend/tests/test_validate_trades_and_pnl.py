@@ -179,6 +179,44 @@ class TestValidateTrades:
         assert "TSLA" in unclosed[0]["message"]
         assert "2024-01-15" in unclosed[0]["message"]
 
+    def test_unclosed_position_has_structured_fields(self):
+        trades = [_trade("2024-01-15", "AAPL", "BUY", 150.0, 10)]
+        items = validate_trades(trades)
+        unclosed = [i for i in items if i["type"] == "unclosed_position"]
+        assert len(unclosed) == 1
+        notice = unclosed[0]
+        assert notice["symbol"] == "AAPL"
+        assert notice["date"] == "2024-01-15"
+        assert notice["price"] == 150.0
+        assert notice["shares"] == 10
+
+    def test_multiple_unclosed_positions_have_structured_fields(self):
+        trades = [
+            _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
+            _trade("2024-01-02", "MSFT", "BUY", 200.0, 5),
+        ]
+        items = validate_trades(trades)
+        unclosed = [i for i in items if i["type"] == "unclosed_position"]
+        assert len(unclosed) == 2
+        by_symbol = {n["symbol"]: n for n in unclosed}
+        assert by_symbol["AAPL"]["date"] == "2024-01-01"
+        assert by_symbol["AAPL"]["price"] == 100.0
+        assert by_symbol["AAPL"]["shares"] == 10
+        assert by_symbol["MSFT"]["date"] == "2024-01-02"
+        assert by_symbol["MSFT"]["price"] == 200.0
+        assert by_symbol["MSFT"]["shares"] == 5
+
+    def test_analyze_uploaded_trades_unclosed_position_has_structured_fields(self):
+        from csv_analyzer import analyze_uploaded_trades
+        csv = "date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,150,10\n"
+        result = analyze_uploaded_trades(csv)
+        assert len(result["notices"]) == 1
+        notice = result["notices"][0]
+        assert notice["type"] == "unclosed_position"
+        assert notice["symbol"] == "AAPL"
+        assert notice["price"] == 150.0
+        assert notice["shares"] == 10
+
     def test_multiple_symbols_paired_independently(self):
         trades = [
             _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
@@ -361,6 +399,20 @@ class TestCalculatePnl:
         result = calculate_pnl(trades)
         assert result["total_pnl"] == 200.0
         assert result["equity_curve"][-1]["cumulative_pnl"] == 200.0
+
+    def test_equity_curve_is_chronological_when_sells_are_out_of_order(self):
+        # CSV has valid BUY->SELL pairing but sell rows are not chronological.
+        trades = [
+            _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
+            _trade("2024-02-01", "MSFT", "BUY", 200.0, 5),
+            _trade("2024-04-01", "MSFT", "SELL", 220.0, 5),   # +100, later close
+            _trade("2024-03-01", "AAPL", "SELL", 110.0, 10),  # +100, earlier close
+        ]
+        result = calculate_pnl(trades)
+        dates = [point["date"] for point in result["equity_curve"]]
+        assert dates == ["2024-03-01", "2024-04-01"]
+        assert result["equity_curve"][0]["cumulative_pnl"] == 100.0
+        assert result["equity_curve"][1]["cumulative_pnl"] == 200.0
 
     def test_result_is_float_or_none(self):
         trades = [

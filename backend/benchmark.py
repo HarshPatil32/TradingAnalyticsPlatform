@@ -57,6 +57,9 @@ def fetch_benchmark(trades: list[dict], ticker: str) -> dict | None:
 
     try:
         data = yf.download(ticker, start=start, end=fetch_end, auto_adjust=True, progress=False)
+        # yfinance 1.x returns MultiIndex columns (field, ticker) for all downloads
+        if hasattr(data.columns, "levels"):
+            data.columns = data.columns.get_level_values(0)
         data.columns = data.columns.str.lower()
     except Exception as exc:
         logger.warning("%s benchmark fetch failed: %s", ticker, exc)
