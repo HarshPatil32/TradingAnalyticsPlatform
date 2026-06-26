@@ -42,13 +42,12 @@ def _no_trading_costs():
 #
 # Trade legs + values: 1000+1300+1000+900+1200+1600 = 7000
 # gross_profit = 300 - 100 + 400 = $600  →  gross_return = 6.0%
-# short_gains=$300  short_tax=$111 (×0.37)
-# long_gains=$400   long_tax=$80  (×0.20)
-# total_tax=$191
-# commissions = 6×$1 = $6
+# commissions = $0 (commission-free default)
 # slippage    = 7000×0.008 = $56
 # spread      = 7000×0.002 = $14
-# total_trading_costs=$76   total_all_costs=$267
+# total_trading_costs=$70
+# tax (offset_losses=True): short_net=200×0.37=$74, long_net=400×0.20=$80 → $154
+# total_all_costs=$224
 MIXED_TRADES = [
     {"date": BUY_DATE,        "symbol": "AAPL", "action": "BUY",  "price": 100.0, "shares": 10},
     {"date": SHORT_SELL_DATE, "symbol": "AAPL", "action": "SELL", "price": 130.0, "shares": 10},
@@ -188,15 +187,16 @@ class TestAdjustedReturnMath:
         assert adj["after_costs_and_tax_pct"] == pytest.approx(4.46, rel=1e-3)
 
     def test_exact_after_all_costs_return_default_config(self):
-        # trading_costs=$76 (0.76%), tax=$154 → total=$230 (2.30%)
-        # after_costs_pct=5.24%, after_costs_and_tax_pct=3.33%
+        # commissions=$0, slippage=7000×0.008=$56, spread=7000×0.002=$14 → trading_costs=$70 (0.70%)
+        # tax (offset_losses): short_net=200×0.37=$74, long_net=400×0.20=$80 → tax=$154
+        # total_all_costs=$224 (2.24%), after_costs_pct=5.30%, after_costs_and_tax_pct=3.76%
         result = calculate_real_costs(MIXED_TRADES, ACCOUNT_SIZE, offset_losses=True)
         adj = result["adjusted_returns"]
         cs = result["cost_summary"]
-        assert cs["total_trading_costs_usd"] == pytest.approx(76.0, rel=1e-3)
-        assert cs["total_all_costs_usd"] == pytest.approx(230.0, rel=1e-3)
-        assert adj["after_costs_pct"] == pytest.approx(5.24, rel=1e-3)
-        assert adj["after_costs_and_tax_pct"] == pytest.approx(3.7, rel=1e-3)
+        assert cs["total_trading_costs_usd"] == pytest.approx(70.0, rel=1e-3)
+        assert cs["total_all_costs_usd"] == pytest.approx(224.0, rel=1e-3)
+        assert adj["after_costs_pct"] == pytest.approx(5.30, rel=1e-3)
+        assert adj["after_costs_and_tax_pct"] == pytest.approx(3.76, rel=1e-3)
 
 
 # Cost summary integrity
@@ -252,12 +252,12 @@ class TestCostSummaryIntegrity:
 # ---------------------------------------------------------------------------
 
 class TestCalculateCommissions:
-    def test_flat_fee_default_one_dollar_per_leg(self):
-        # 6 trade legs (3 BUY + 3 SELL) × $1.00 = $6.00
+    def test_default_commission_is_zero(self):
+        # Default is $0 — commission-free brokers (Robinhood, Webull, etc.)
         result = calculate_commissions(MIXED_TRADES)
-        assert result["total_commission_usd"] == pytest.approx(6.0)
+        assert result["total_commission_usd"] == pytest.approx(0.0)
         assert result["num_trades"] == 6
-        assert result["commission_rate"] == 1.0
+        assert result["commission_rate"] == 0.0
         assert result["is_pct"] is False
 
     def test_custom_flat_fee(self):

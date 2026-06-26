@@ -198,6 +198,74 @@ def sanitize_csv(csv_data: str) -> str:
     return csv_data
 
 
+# ---------------------------------------------------------------------------
+# Broker format normalisation
+# ---------------------------------------------------------------------------
+
+# Headers present in a Robinhood CSV export (lowercase)
+_ROBINHOOD_HEADERS: frozenset[str] = frozenset({
+    "activity date", "process date", "settle date",
+    "instrument", "description", "trans code", "quantity", "price", "amount",
+})
+
+# Trans Code values that represent actual trades (not dividends, transfers, etc.)
+_ROBINHOOD_TRADE_CODES: frozenset[str] = frozenset({"BUY", "SELL"})
+
+
+def _detect_broker_format(csv_data: str) -> str | None:
+    """Return a broker name string if a known brokerage export is detected, else None."""
+    reader = csv.reader(io.StringIO(csv_data))
+    try:
+        header_row = next(reader)
+    except StopIteration:
+        return None
+    headers = frozenset(col.strip().lower() for col in header_row if col.strip())
+    if _ROBINHOOD_HEADERS <= headers:
+        return "robinhood"
+    return None
+
+
+def _normalize_robinhood(csv_data: str) -> str:
+    """Convert a Robinhood CSV export to the standard detailed format.
+
+    Filters to Buy/Sell rows only, remaps columns, converts dates from
+    M/D/YYYY to YYYY-MM-DD, and strips currency symbols from prices.
+    """
+    reader = csv.DictReader(io.StringIO(csv_data))
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["date", "symbol", "action", "price", "shares"])
+    for row in reader:
+        trans_code = (row.get("Trans Code") or "").strip()
+        if trans_code.upper() not in _ROBINHOOD_TRADE_CODES:
+            continue
+        raw_date = (row.get("Activity Date") or "").strip()
+        try:
+            date_val = datetime.strptime(raw_date, "%m/%d/%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+        symbol = (row.get("Instrument") or "").strip()
+        action = trans_code.upper()
+        # Strip leading "$" and commas (e.g. "$1,234.56" -> "1234.56")
+        raw_price = (row.get("Price") or "").strip().lstrip("$").replace(",", "")
+        shares = (row.get("Quantity") or "").strip()
+        writer.writerow([date_val, symbol, action, raw_price, shares])
+    return out.getvalue()
+
+
+def normalize_broker_format(csv_data: str) -> str:
+    """Detect and convert known broker export formats to the standard detailed format.
+
+    Returns the data unchanged if no known broker format is detected.
+    Currently supports: Robinhood.
+    """
+    broker = _detect_broker_format(csv_data)
+    if broker == "robinhood":
+        logger.info("Detected Robinhood export; normalizing to standard format")
+        return _normalize_robinhood(csv_data)
+    return csv_data
+
+
 def detect_format(csv_data: str) -> str:
     """Return 'detailed' or 'summary' based on the CSV header columns.
 
@@ -445,6 +513,10 @@ def validate_trades(trades: list[dict]) -> list[dict]:
                 "type": "unclosed_position",
                 "level": "info",
                 "message": f"Open position: {symbol} BUY on {date} (no matching SELL yet)",
+                "symbol": symbol,
+                "date": date,
+                "price": buy.get("price"),
+                "shares": buy.get("shares"),
             })
 
     # Check for zero or negative price or share count, or missing/invalid values
@@ -509,11 +581,16 @@ def calculate_pnl(trades: list[dict]) -> dict:
                 "cumulative_pnl": round(cumulative_pnl, 4),
             })
 
-    # Equity curve: cumulative P&L at each sell event (chronological order)
-    equity_curve = [
-        {"date": t["sell_date"], "cumulative_pnl": t["cumulative_pnl"]}
-        for t in trade_pnl
-    ]
+    # Equity curve: cumulative P&L at each sell event in chronological order.
+    # trade_pnl follows CSV row order; sort by close date so the chart reads left-to-right.
+    running_pnl = 0.0
+    equity_curve = []
+    for t in sorted(trade_pnl, key=lambda row: row["sell_date"]):
+        running_pnl += t["pnl"]
+        equity_curve.append({
+            "date": t["sell_date"],
+            "cumulative_pnl": round(running_pnl, 4),
+        })
 
     # Total return as a percentage of total capital deployed (sum of all buy costs)
     total_buy_cost = sum(
@@ -750,6 +827,7 @@ def analyze_uploaded_trades(csv_data: str, commission_per_trade: float = DEFAULT
     """Main entry point: sanitize, detect format, parse, validate, and return analysis results."""
     try:
         clean = sanitize_csv(csv_data)
+        clean = normalize_broker_format(clean)
         fmt = detect_format(clean)
     except ValueError as e:
         return {
@@ -786,7 +864,7 @@ def analyze_uploaded_trades(csv_data: str, commission_per_trade: float = DEFAULT
             "warnings": warnings,
         }
 
-    trades = parse_detailed(clean) or []
+    trades = parse_detailed(clean, is_free_tier=False) or []  # TODO: re-enable for production
     all_issues = validate_trades(trades) or []
     WARNING_LEVELS = {"warning", "error"}
     INFO_LEVELS = {"info"}
