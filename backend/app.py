@@ -117,6 +117,16 @@ CORS_ORIGINS = _build_cors_origins(ALLOWED_ORIGINS)
 # Strict policy for a JSON-only API. Expand this if HTML routes are added.
 CSP_POLICY = "default-src 'none'; frame-ancestors 'none'; base-uri 'self'"
 
+# Referrer-Policy is stricter here (no-referrer) than on the Vercel SPA
+# (strict-origin-when-cross-origin) because this API serves JSON only.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=(), payment=()",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+}
+
 _MB = 1024 * 1024
 # Max upload size for all file uploads (5 MB). Applies to every route via MAX_CONTENT_LENGTH.
 # Keep in sync with MAX_FILE_BYTES in frontend/src/screens/BacktestUpload.jsx
@@ -190,6 +200,8 @@ logger = logging.getLogger(__name__)
 @app.after_request
 def set_security_headers(response):
     response.headers["Content-Security-Policy"] = CSP_POLICY
+    for name, value in SECURITY_HEADERS.items():
+        response.headers[name] = value
     return response
 
 @app.errorhandler(404)

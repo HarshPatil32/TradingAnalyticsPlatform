@@ -1,6 +1,6 @@
 """Tests that security headers are present on every Flask response."""
 import pytest
-from app import app, CSP_POLICY
+from app import app, CSP_POLICY, SECURITY_HEADERS
 
 
 @pytest.fixture()
@@ -8,6 +8,12 @@ def client():
     app.config["TESTING"] = True
     with app.test_client() as c:
         yield c
+
+
+def _assert_headers_on_response(resp):
+    assert resp.headers["Content-Security-Policy"] == CSP_POLICY
+    for name, value in SECURITY_HEADERS.items():
+        assert resp.headers[name] == value
 
 
 class TestCSPHeader:
@@ -42,3 +48,19 @@ class TestCSPHeader:
     def test_csp_present_on_options_preflight(self, client):
         resp = client.options("/heartbeat")
         assert "Content-Security-Policy" in resp.headers
+
+
+class TestStandardSecurityHeaders:
+    @pytest.mark.parametrize("path", ["/", "/heartbeat", "/nonexistent-route-xyz"])
+    def test_present_on_responses(self, client, path):
+        resp = client.get(path)
+        _assert_headers_on_response(resp)
+
+    def test_present_on_options_preflight(self, client):
+        resp = client.options("/heartbeat")
+        _assert_headers_on_response(resp)
+
+    @pytest.mark.parametrize("header_name", list(SECURITY_HEADERS.keys()))
+    def test_values_match_constants(self, client, header_name):
+        resp = client.get("/heartbeat")
+        assert resp.headers[header_name] == SECURITY_HEADERS[header_name]

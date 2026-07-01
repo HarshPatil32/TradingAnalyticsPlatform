@@ -1,4 +1,5 @@
 // Reads and validates required env variables at startup
+// Keep vercel.json CSP connect-src in sync with FALLBACK_URL / VITE_API_URL.
 const FALLBACK_URL = 'https://mytradingbot-project.onrender.com';
 const rawApiUrl = import.meta.env.VITE_API_URL?.trim();
 
