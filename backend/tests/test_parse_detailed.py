@@ -333,10 +333,10 @@ class TestAnalyzeUploadedTradesDetailed:
         assert "total_commission_usd" in result["commissions"]
         assert "num_trades" in result["commissions"]
 
-    def test_default_commission_is_one_dollar_per_leg(self):
-        # 2 trade legs (1 BUY + 1 SELL) × $1.00 default = $2.00
+    def test_default_commission_is_zero_per_leg(self):
+        # 2 trade legs (1 BUY + 1 SELL) × $0.00 default = $0.00
         result = analyze_uploaded_trades(self._VALID_CSV)
-        assert result["commissions"]["total_commission_usd"] == pytest.approx(2.0)
+        assert result["commissions"]["total_commission_usd"] == pytest.approx(0.0)
         assert result["commissions"]["num_trades"] == 2
 
     def test_custom_commission_per_trade(self):
