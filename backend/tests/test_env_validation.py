@@ -2,6 +2,22 @@
 
 import pytest
 
+_SUPABASE_ENV_VARS = (
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_JWT_SECRET",
+)
+
+
+@pytest.fixture
+def health_check_client():
+    from app import app as flask_app
+
+    flask_app.config["TESTING"] = True
+    with flask_app.test_client() as client:
+        yield client
+
 
 class TestValidateEnvVarsShape:
     def test_returns_expected_keys(self):
@@ -77,6 +93,37 @@ class TestValidateEnvVarsLogic:
             validate_env_vars()
         for record in caplog.records:
             assert "supersecret" not in record.message
+
+    def test_supabase_jwt_secret_not_logged(self, monkeypatch, caplog):
+        monkeypatch.setenv("SUPABASE_JWT_SECRET", "fake-jwt-secret-value")
+        import logging
+
+        from app import validate_env_vars
+
+        with caplog.at_level(logging.INFO):
+            validate_env_vars()
+        for record in caplog.records:
+            assert "fake-jwt-secret-value" not in record.message
+
+
+class TestSupabaseEnvVarsInManifest:
+    @pytest.mark.parametrize("var_name", _SUPABASE_ENV_VARS)
+    def test_in_missing_optional_when_unset(self, monkeypatch, var_name):
+        monkeypatch.delenv(var_name, raising=False)
+        from app import validate_env_vars
+
+        result = validate_env_vars()
+        assert var_name in result["missing_optional"]
+        assert var_name not in result["missing_required"]
+
+    @pytest.mark.parametrize("var_name", _SUPABASE_ENV_VARS)
+    def test_not_in_missing_when_set(self, monkeypatch, var_name):
+        monkeypatch.setenv(var_name, "test-value")
+        from app import validate_env_vars
+
+        result = validate_env_vars()
+        assert var_name not in result["missing_optional"]
+        assert var_name not in result["missing_required"]
 
 
 class TestAllowedOriginsParsing:
@@ -205,30 +252,22 @@ class TestBuildCorsOrigins:
 
 
 class TestHealthCheckEnvStatus:
-    @pytest.fixture(scope="class")
-    def client(self):
-        from app import app as flask_app
-
-        flask_app.config["TESTING"] = True
-        with flask_app.test_client() as c:
-            yield c
-
-    def test_env_status_present_in_response(self, client):
-        resp = client.get("/")
+    def test_env_status_present_in_response(self, health_check_client):
+        resp = health_check_client.get("/")
         data = resp.get_json()
         assert "env_status" in data
 
-    def test_env_status_has_all_present_field(self, client):
-        resp = client.get("/")
+    def test_env_status_has_all_present_field(self, health_check_client):
+        resp = health_check_client.get("/")
         data = resp.get_json()
         assert "all_present" in data["env_status"]
 
-    def test_env_status_has_missing_required_field(self, client):
-        resp = client.get("/")
+    def test_env_status_has_missing_required_field(self, health_check_client):
+        resp = health_check_client.get("/")
         data = resp.get_json()
         assert "missing_required" in data["env_status"]
 
-    def test_missing_required_is_list(self, client):
-        resp = client.get("/")
+    def test_missing_required_is_list(self, health_check_client):
+        resp = health_check_client.get("/")
         data = resp.get_json()
         assert isinstance(data["env_status"]["missing_required"], list)

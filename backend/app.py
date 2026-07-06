@@ -38,6 +38,26 @@ _ENV_VAR_MANIFEST = (
         "required": False,
         "description": "Comma-separated CORS origins; defaults to * (all) if not set",
     },
+    {
+        "name": "SUPABASE_URL",
+        "required": False,
+        "description": "Supabase project URL (e.g. https://xxxxx.supabase.co)",
+    },
+    {
+        "name": "SUPABASE_ANON_KEY",
+        "required": False,
+        "description": "Supabase anon/public API key (client-safe, RLS-restricted)",
+    },
+    {
+        "name": "SUPABASE_SERVICE_ROLE_KEY",
+        "required": False,
+        "description": "Supabase service-role key (server-side only, bypasses RLS)",
+    },
+    {
+        "name": "SUPABASE_JWT_SECRET",
+        "required": False,
+        "description": "Secret used to verify Supabase-issued JWTs on protected routes",
+    },
 )
 
 
