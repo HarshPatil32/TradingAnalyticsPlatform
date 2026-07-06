@@ -43,9 +43,18 @@ The server will start on `http://localhost:5001`
 
 ## Environment Variables
 
-Copy `backend/.env.example` to `backend/.env` for local development (`.env` is gitignored).
+Copy `backend/.env.example` to `backend/.env` for local development (`.env` is gitignored). On Render, set these in the dashboard instead.
+
+At startup, `app.py` validates vars listed in `_ENV_VAR_MANIFEST`. Optional vars log INFO if missing; required vars log WARNING. The health check (`GET /`) includes an `env_status` summary.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `PORT` | No | `5001` | Port the server binds to. Injected automatically by Render. |
-| `FLASK_ENV` | No | — | Flask environment mode. Set to `development` locally. |
+| `FLASK_DEBUG` | No | off | Set to `1` to enable Flask debug mode locally. |
+| `ALLOWED_ORIGINS` | No | `*` (all) | Comma-separated CORS origins for production (e.g. your Vercel frontend URL). |
+| `SUPABASE_URL` | No | — | Supabase project URL. Dashboard: Project Settings → API. |
+| `SUPABASE_ANON_KEY` | No | — | Supabase anon/public key (client-safe, RLS-restricted). |
+| `SUPABASE_SERVICE_ROLE_KEY` | No | — | Supabase service-role key. **Server-side only** — never expose to the frontend. |
+| `SUPABASE_JWT_SECRET` | No | — | JWT secret for verifying Supabase-issued tokens on protected routes. Dashboard: Project Settings → API → JWT Settings → JWT Secret. |
+
+Supabase vars are optional until auth/DB integration is wired up; the app boots without them.
