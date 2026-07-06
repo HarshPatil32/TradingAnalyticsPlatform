@@ -1,17 +1,54 @@
 """Tests for run_significance_tests() in statistical_tests.py."""
-import random
-import pytest
 
-from statistical_tests import run_significance_tests, winrate_binomial_test, plain_english_verdict, VERDICT_NOT_ENOUGH, VERDICT_REAL_EDGE
+import random
+
+from statistical_tests import (
+    VERDICT_NOT_ENOUGH,
+    VERDICT_REAL_EDGE,
+    plain_english_verdict,
+    run_significance_tests,
+    winrate_binomial_test,
+)
 
 # Shared fixtures
 
 # 35 consistently profitable trades (mean ~8, sd ~5)
 WINNING_TRADES = [
-    12.5,  8.3, -3.1, 15.2,  9.8, -2.4, 11.0,  7.6, -1.8, 14.3,
-    10.5,  6.2, -4.0, 13.1,  8.9, -2.9, 12.0,  9.3, -3.5, 11.7,
-     7.8, -1.5, 14.9, 10.2,  8.1, -2.2, 13.5,  9.7, -3.8, 12.3,
-    11.1,  6.9, -2.6, 15.0,  8.5,
+    12.5,
+    8.3,
+    -3.1,
+    15.2,
+    9.8,
+    -2.4,
+    11.0,
+    7.6,
+    -1.8,
+    14.3,
+    10.5,
+    6.2,
+    -4.0,
+    13.1,
+    8.9,
+    -2.9,
+    12.0,
+    9.3,
+    -3.5,
+    11.7,
+    7.8,
+    -1.5,
+    14.9,
+    10.2,
+    8.1,
+    -2.2,
+    13.5,
+    9.7,
+    -3.8,
+    12.3,
+    11.1,
+    6.9,
+    -2.6,
+    15.0,
+    8.5,
 ]
 
 # 35 trades drawn from N(0, 10) — no real edge
@@ -27,13 +64,21 @@ FLAT_TRADES = [5.0] * 30
 
 # 1. Return structure
 
+
 class TestReturnStructure:
     def test_has_all_top_level_keys(self):
         result = run_significance_tests(WINNING_TRADES)
         expected_keys = {
-            "verdict", "confidence_level", "summary",
-            "trade_count", "min_trade_count_met",
-            "ttest", "bootstrap_ci", "sharpe", "winrate", "warnings",
+            "verdict",
+            "confidence_level",
+            "summary",
+            "trade_count",
+            "min_trade_count_met",
+            "ttest",
+            "bootstrap_ci",
+            "sharpe",
+            "winrate",
+            "warnings",
         }
         assert expected_keys.issubset(result.keys())
 
@@ -45,21 +90,34 @@ class TestReturnStructure:
 
     def test_bootstrap_ci_has_required_keys(self):
         result = run_significance_tests(WINNING_TRADES)
-        assert {"mean", "ci_lower", "ci_upper", "ci_excludes_zero", "interpretation"}.issubset(
-            result["bootstrap_ci"].keys()
-        )
+        assert {
+            "mean",
+            "ci_lower",
+            "ci_upper",
+            "ci_excludes_zero",
+            "interpretation",
+        }.issubset(result["bootstrap_ci"].keys())
 
     def test_sharpe_has_required_keys(self):
         result = run_significance_tests(WINNING_TRADES)
-        assert {"sharpe_ratio", "t_statistic", "p_value", "significant", "interpretation"}.issubset(
-            result["sharpe"].keys()
-        )
+        assert {
+            "sharpe_ratio",
+            "t_statistic",
+            "p_value",
+            "significant",
+            "interpretation",
+        }.issubset(result["sharpe"].keys())
 
     def test_winrate_has_required_keys(self):
         result = run_significance_tests(WINNING_TRADES)
-        assert {"win_rate", "wins", "losses", "p_value", "significant", "interpretation"}.issubset(
-            result["winrate"].keys()
-        )
+        assert {
+            "win_rate",
+            "wins",
+            "losses",
+            "p_value",
+            "significant",
+            "interpretation",
+        }.issubset(result["winrate"].keys())
 
     def test_warnings_is_list(self):
         result = run_significance_tests(WINNING_TRADES)
@@ -71,6 +129,7 @@ class TestReturnStructure:
 
 
 # 2. Verdict logic
+
 
 class TestVerdictLogic:
     def test_winning_trades_significant(self):
@@ -110,6 +169,7 @@ class TestVerdictLogic:
 
 # 3. Threshold and parameter control
 
+
 class TestParameters:
     def test_custom_min_trades_raises_insufficient(self):
         # WINNING_TRADES has 35; requiring 50 should flip to INSUFFICIENT_DATA
@@ -122,16 +182,21 @@ class TestParameters:
 
     def test_strict_alpha_can_change_significance(self):
         # Use a very tight alpha so noise_trades still fail, and check winning trades
-        result_normal = run_significance_tests(WINNING_TRADES, alpha=0.05)
+        run_significance_tests(WINNING_TRADES, alpha=0.05)
         result_strict = run_significance_tests(WINNING_TRADES, alpha=1e-10)
         # With a practically impossible alpha, even winning strategy should not be significant
         assert result_strict["ttest"]["significant"] is False
 
     def test_risk_free_affects_sharpe(self):
         result_zero_rf = run_significance_tests(WINNING_TRADES, risk_free_per_trade=0.0)
-        result_high_rf = run_significance_tests(WINNING_TRADES, risk_free_per_trade=100.0)
+        result_high_rf = run_significance_tests(
+            WINNING_TRADES, risk_free_per_trade=100.0
+        )
         # High risk-free rate should reduce / eliminate Sharpe significance
-        assert result_zero_rf["sharpe"]["sharpe_ratio"] > result_high_rf["sharpe"]["sharpe_ratio"]
+        assert (
+            result_zero_rf["sharpe"]["sharpe_ratio"]
+            > result_high_rf["sharpe"]["sharpe_ratio"]
+        )
 
     def test_bootstrap_seed_reproducible(self):
         r1 = run_significance_tests(NOISE_TRADES, bootstrap_seed=7)
@@ -145,7 +210,9 @@ class TestParameters:
         # CIs from different seeds are not guaranteed equal for noisy data
         assert r1["bootstrap_ci"]["ci_lower"] != r2["bootstrap_ci"]["ci_lower"]
 
+
 # 4. Edge cases
+
 
 class TestEdgeCases:
     def test_integer_inputs_coerced_to_float(self):
@@ -223,6 +290,7 @@ class TestEdgeCases:
 
 # 5. Bootstrap CI
 
+
 class TestBootstrapCI:
     def test_ci_lower_lte_upper(self):
         result = run_significance_tests(WINNING_TRADES)
@@ -244,6 +312,7 @@ class TestBootstrapCI:
 
 
 # 6. P-value sanity (t-test, Sharpe, binomial)
+
 
 class TestPValues:
     def test_ttest_p_value_in_unit_interval(self):
@@ -319,6 +388,7 @@ class TestWinrateBinomialTest:
         assert result["losses"] == 0
         assert result["significant"] is False
         assert "no nonzero" in result["interpretation"].lower()
+
     def test_high_win_rate_is_significant(self):
         result = run_significance_tests(HIGH_WIN_RATE_TRADES)
         assert result["winrate"]["significant"] is True
@@ -349,7 +419,12 @@ class TestWinrateBinomialTest:
         assert result["winrate"]["significant"] is False
 
     def test_win_rate_is_fraction(self):
-        for pnl in [WINNING_TRADES, NOISE_TRADES, HIGH_WIN_RATE_TRADES, COIN_FLIP_TRADES]:
+        for pnl in [
+            WINNING_TRADES,
+            NOISE_TRADES,
+            HIGH_WIN_RATE_TRADES,
+            COIN_FLIP_TRADES,
+        ]:
             wr = run_significance_tests(pnl)["winrate"]["win_rate"]
             assert 0.0 <= wr <= 1.0
 
@@ -407,8 +482,9 @@ class TestPlainEnglishVerdict:
     def test_custom_min_trades_affects_verdict(self):
         # WINNING_TRADES (35) is significant at default min_trades=30
         # Raising the bar to 50 should flip it to "not enough trades to know yet"
-        assert plain_english_verdict(WINNING_TRADES, min_trades=50) == VERDICT_NOT_ENOUGH
+        assert (
+            plain_english_verdict(WINNING_TRADES, min_trades=50) == VERDICT_NOT_ENOUGH
+        )
 
     def test_returns_string(self):
         assert isinstance(plain_english_verdict(WINNING_TRADES), str)
-

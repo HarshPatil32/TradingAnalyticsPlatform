@@ -1,6 +1,8 @@
 """Tests that security headers are present on every Flask response."""
+
 import pytest
-from app import app, CSP_POLICY, SECURITY_HEADERS
+
+from app import CSP_POLICY, SECURITY_HEADERS, app
 
 
 @pytest.fixture()

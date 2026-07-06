@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Sequence
 
@@ -49,26 +49,26 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Equity smoothness – R² of equity curve against a linear trend
-_R2_LOW:  float = 0.80   # below → minimal smoothness concern
-_R2_HIGH: float = 0.98   # above → near-perfect smoothness → suspicious
+_R2_LOW: float = 0.80  # below → minimal smoothness concern
+_R2_HIGH: float = 0.98  # above → near-perfect smoothness → suspicious
 
 # Win rate plausibility
-_WR_LOW:  float = 0.60   # below → normal trading win rate
-_WR_HIGH: float = 0.90   # above → highly implausible for a discretionary eq strategy
+_WR_LOW: float = 0.60  # below → normal trading win rate
+_WR_HIGH: float = 0.90  # above → highly implausible for a discretionary eq strategy
 
 # Annualised Sharpe plausibility
-_SHARPE_LOW:  float = 1.5   # below → reasonable
-_SHARPE_HIGH: float = 4.0   # above → implausible without insider edge
+_SHARPE_LOW: float = 1.5  # below → reasonable
+_SHARPE_HIGH: float = 4.0  # above → implausible without insider edge
 
 # Trade-clustering Gini coefficient
-_GINI_LOW:  float = 0.20   # below → evenly distributed trades
-_GINI_HIGH: float = 0.70   # above → severe clustering
+_GINI_LOW: float = 0.20  # below → evenly distributed trades
+_GINI_HIGH: float = 0.70  # above → severe clustering
 
 # Default factor weights (sum = 1.0)
-_WEIGHT_SMOOTHNESS:  float = 0.30
-_WEIGHT_WIN_RATE:    float = 0.25
-_WEIGHT_SHARPE:      float = 0.25
-_WEIGHT_CLUSTERING:  float = 0.20
+_WEIGHT_SMOOTHNESS: float = 0.30
+_WEIGHT_WIN_RATE: float = 0.25
+_WEIGHT_SHARPE: float = 0.25
+_WEIGHT_CLUSTERING: float = 0.20
 
 # Risk tier labels
 _TIERS = [
@@ -76,7 +76,7 @@ _TIERS = [
     (60, "HIGH      – notable overfitting risk"),
     (40, "MODERATE  – some suspicious characteristics"),
     (20, "LOW       – minor concerns, monitor closely"),
-    ( 0, "MINIMAL   – no significant overfitting signal"),
+    (0, "MINIMAL   – no significant overfitting signal"),
 ]
 
 # Plain-English descriptions for each config key.
@@ -139,6 +139,7 @@ _CONFIG_DESCRIPTIONS: dict[str, str] = {
 # Configuration dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class OverfittingConfig:
     """
@@ -146,26 +147,27 @@ class OverfittingConfig:
     The defaults reflect published academic and practitioner norms for
     equity long/short strategies; adjust for options or HFT strategies.
     """
+
     # Factor weights (normalised internally if they don't sum to 1.0)
-    weight_smoothness:  float = _WEIGHT_SMOOTHNESS
-    weight_win_rate:    float = _WEIGHT_WIN_RATE
-    weight_sharpe:      float = _WEIGHT_SHARPE
-    weight_clustering:  float = _WEIGHT_CLUSTERING
+    weight_smoothness: float = _WEIGHT_SMOOTHNESS
+    weight_win_rate: float = _WEIGHT_WIN_RATE
+    weight_sharpe: float = _WEIGHT_SHARPE
+    weight_clustering: float = _WEIGHT_CLUSTERING
 
     # Equity-curve smoothness (R²)
-    r2_low:  float = _R2_LOW
+    r2_low: float = _R2_LOW
     r2_high: float = _R2_HIGH
 
     # Win rate boundaries
-    win_rate_low:  float = _WR_LOW
+    win_rate_low: float = _WR_LOW
     win_rate_high: float = _WR_HIGH
 
     # Annualised Sharpe boundaries
-    sharpe_low:  float = _SHARPE_LOW
+    sharpe_low: float = _SHARPE_LOW
     sharpe_high: float = _SHARPE_HIGH
 
     # Trade-clustering Gini boundaries
-    gini_low:  float = _GINI_LOW
+    gini_low: float = _GINI_LOW
     gini_high: float = _GINI_HIGH
 
     # Number of time buckets used when evaluating clustering
@@ -182,6 +184,7 @@ class OverfittingConfig:
 # ---------------------------------------------------------------------------
 # Internal maths helpers
 # ---------------------------------------------------------------------------
+
 
 def _linear_r_squared(y: list[float]) -> float:
     """
@@ -202,9 +205,9 @@ def _linear_r_squared(y: list[float]) -> float:
     ss_xy = sum((i - x_mean) * (yi - y_mean) for i, yi in enumerate(y))
 
     if ss_yy == 0.0:
-        return 1.0   # flat curve – perfectly "linear"
+        return 1.0  # flat curve – perfectly "linear"
     if ss_xx == 0.0:
-        return 0.0   # single point
+        return 0.0  # single point
 
     slope = ss_xy / ss_xx
     intercept = y_mean - slope * x_mean
@@ -289,6 +292,7 @@ def _parse_date(val: Any) -> date | None:
 # Factor 1 – Equity-curve smoothness
 # ---------------------------------------------------------------------------
 
+
 def score_equity_smoothness(
     equity_curve: Sequence[float],
     config: OverfittingConfig | None = None,
@@ -324,7 +328,9 @@ def score_equity_smoothness(
     warnings: list[str] = []
 
     if len(curve) < 3:
-        warnings.append("Equity curve has fewer than 3 points — smoothness score defaulted to 0.")
+        warnings.append(
+            "Equity curve has fewer than 3 points — smoothness score defaulted to 0."
+        )
         return {
             "score": 0.0,
             "r_squared": None,
@@ -351,7 +357,7 @@ def score_equity_smoothness(
 
     # Drawdown-absence penalty: a curve with < 1% drawdown is suspicious
     # Scale: 0% drawdown → +20 penalty, 10%+ drawdown → 0 penalty
-    dd_threshold = 0.01    # 1 %
+    dd_threshold = 0.01  # 1 %
     dd_penalty = 0.0
     if max_dd < dd_threshold:
         dd_penalty = _linear_interpolate(1.0 - max_dd / dd_threshold, 0.0, 1.0) * 0.20
@@ -364,25 +370,32 @@ def score_equity_smoothness(
         f"Smoothness sub-score={r2_score:.1f}/100; drawdown-absence penalty=+{dd_penalty:.1f}.",
     ]
     if r2 > 0.95:
-        lines.append("Near-perfect linearity detected — characteristic of overfit equity curves.")
+        lines.append(
+            "Near-perfect linearity detected — characteristic of overfit equity curves."
+        )
         warnings.append("R² > 0.95: equity curve is suspiciously smooth.")
     if max_dd < 0.01:
-        lines.append("Max drawdown < 1% — virtually no losing periods, highly unrealistic.")
-        warnings.append("Max drawdown < 1%: absence of drawdowns is a curve-fitting signal.")
+        lines.append(
+            "Max drawdown < 1% — virtually no losing periods, highly unrealistic."
+        )
+        warnings.append(
+            "Max drawdown < 1%: absence of drawdowns is a curve-fitting signal."
+        )
 
     return {
-        "score":            round(raw_score, 2),
-        "r_squared":        round(r2, 6),
+        "score": round(raw_score, 2),
+        "r_squared": round(r2, 6),
         "max_drawdown_pct": round(max_dd * 100, 4),
         "drawdown_penalty": round(dd_penalty, 2),
-        "interpretation":   " ".join(lines),
-        "warnings":         warnings,
+        "interpretation": " ".join(lines),
+        "warnings": warnings,
     }
 
 
 # ---------------------------------------------------------------------------
 # Factor 2 – Win-rate plausibility
 # ---------------------------------------------------------------------------
+
 
 def score_win_rate(
     pnl_list: Sequence[float],
@@ -426,15 +439,17 @@ def score_win_rate(
 
     binom = winrate_binomial_test(data, alpha=cfg.alpha)
     win_rate = binom.get("win_rate") or 0.0
-    wins     = binom.get("wins",   0)
-    losses   = binom.get("losses", 0)
+    wins = binom.get("wins", 0)
+    losses = binom.get("losses", 0)
 
     wr_score = _linear_interpolate(win_rate, cfg.win_rate_low, cfg.win_rate_high)
 
     # Bonus suspicion if stat-significant AND win rate is already high:
     # a believable strategy can be significant at 60 %; a 90 % significant win
     # rate is far harder to explain legitimately.
-    significance_multiplier = 1.15 if binom.get("significant") and win_rate > 0.70 else 1.0
+    significance_multiplier = (
+        1.15 if binom.get("significant") and win_rate > 0.70 else 1.0
+    )
     raw_score = _clamp(wr_score * significance_multiplier)
 
     lines = [
@@ -446,25 +461,32 @@ def score_win_rate(
         lines.append(
             f"Win rate exceeds {cfg.win_rate_high:.0%} — implausible for most equity strategies."
         )
-        warnings.append(f"Win rate {win_rate:.2%} exceeds plausibility ceiling of {cfg.win_rate_high:.0%}.")
+        warnings.append(
+            f"Win rate {win_rate:.2%} exceeds plausibility ceiling of {cfg.win_rate_high:.0%}."
+        )
     if binom.get("significant") and win_rate > 0.70:
-        lines.append("High win rate is statistically significant — could indicate data snooping.")
-        warnings.append("Statistically significant high win rate may reflect look-ahead bias or over-optimisation.")
+        lines.append(
+            "High win rate is statistically significant — could indicate data snooping."
+        )
+        warnings.append(
+            "Statistically significant high win rate may reflect look-ahead bias or over-optimisation."
+        )
 
     return {
-        "score":          round(raw_score, 2),
-        "win_rate":       round(win_rate, 6),
-        "wins":           wins,
-        "losses":         losses,
-        "binomial_test":  binom,
+        "score": round(raw_score, 2),
+        "win_rate": round(win_rate, 6),
+        "wins": wins,
+        "losses": losses,
+        "binomial_test": binom,
         "interpretation": " ".join(lines),
-        "warnings":       warnings,
+        "warnings": warnings,
     }
 
 
 # ---------------------------------------------------------------------------
 # Factor 3 – Sharpe-ratio plausibility
 # ---------------------------------------------------------------------------
+
 
 def score_sharpe(
     pnl_list: Sequence[float],
@@ -508,7 +530,7 @@ def score_sharpe(
         }
 
     sharpe_result = sharpe_significance(data, alpha=cfg.alpha)
-    per_trade_sr  = sharpe_result.get("sharpe_ratio")
+    per_trade_sr = sharpe_result.get("sharpe_ratio")
 
     annualised_sr: float | None = None
     scored_sr: float = 0.0
@@ -516,22 +538,30 @@ def score_sharpe(
     if per_trade_sr is not None:
         if cfg.trades_per_year and cfg.trades_per_year > 0:
             annualised_sr = per_trade_sr * math.sqrt(cfg.trades_per_year)
-            scored_sr     = abs(annualised_sr)      # use absolute value for one-sided scoring
+            scored_sr = abs(annualised_sr)  # use absolute value for one-sided scoring
         else:
             scored_sr = abs(per_trade_sr)
 
-        used_high = cfg.sharpe_high if cfg.trades_per_year else cfg.sharpe_high / math.sqrt(252)
-        used_low  = cfg.sharpe_low  if cfg.trades_per_year else cfg.sharpe_low  / math.sqrt(252)
+        used_high = (
+            cfg.sharpe_high if cfg.trades_per_year else cfg.sharpe_high / math.sqrt(252)
+        )
+        used_low = (
+            cfg.sharpe_low if cfg.trades_per_year else cfg.sharpe_low / math.sqrt(252)
+        )
         sharpe_score = _linear_interpolate(scored_sr, used_low, used_high)
     else:
         sharpe_score = 0.0
 
     # Amplify if the Sharpe is also statistically significant
-    sig_mult = 1.10 if sharpe_result.get("significant") and scored_sr > cfg.sharpe_low else 1.0
+    sig_mult = (
+        1.10 if sharpe_result.get("significant") and scored_sr > cfg.sharpe_low else 1.0
+    )
     raw_score = _clamp(sharpe_score * sig_mult)
 
-    ann_label = f"{annualised_sr:.3f}" if annualised_sr is not None else "N/A (not annualised)"
-    pt_label  = f"{per_trade_sr:.4f}" if per_trade_sr is not None else "N/A"
+    ann_label = (
+        f"{annualised_sr:.3f}" if annualised_sr is not None else "N/A (not annualised)"
+    )
+    pt_label = f"{per_trade_sr:.4f}" if per_trade_sr is not None else "N/A"
     lines = [
         f"Per-trade Sharpe={pt_label}.",
         f"Annualised Sharpe (×√{cfg.trades_per_year:.0f})={ann_label}.",
@@ -547,18 +577,23 @@ def score_sharpe(
         )
 
     return {
-        "score":             round(raw_score, 2),
-        "per_trade_sharpe":  round(per_trade_sr, 6) if per_trade_sr is not None else None,
-        "annualised_sharpe": round(annualised_sr, 4) if annualised_sr is not None else None,
-        "sharpe_test":       sharpe_result,
-        "interpretation":    " ".join(lines),
-        "warnings":          warnings,
+        "score": round(raw_score, 2),
+        "per_trade_sharpe": (
+            round(per_trade_sr, 6) if per_trade_sr is not None else None
+        ),
+        "annualised_sharpe": (
+            round(annualised_sr, 4) if annualised_sr is not None else None
+        ),
+        "sharpe_test": sharpe_result,
+        "interpretation": " ".join(lines),
+        "warnings": warnings,
     }
 
 
 # ---------------------------------------------------------------------------
 # Factor 4 – Trade-frequency clustering
 # ---------------------------------------------------------------------------
+
 
 def score_trade_clustering(
     trade_dates: Sequence[Any],
@@ -618,12 +653,14 @@ def score_trade_clustering(
 
     parsed.sort()
     start_ord = parsed[0].toordinal()
-    end_ord   = parsed[-1].toordinal()
-    span      = end_ord - start_ord
+    end_ord = parsed[-1].toordinal()
+    span = end_ord - start_ord
 
     if span == 0:
         # All trades on one day
-        warnings.append("All trades occur on the same date — extreme clustering detected.")
+        warnings.append(
+            "All trades occur on the same date — extreme clustering detected."
+        )
         return {
             "score": 100.0,
             "gini": 1.0,
@@ -654,7 +691,9 @@ def score_trade_clustering(
     if intervals:
         mean_iv = sum(intervals) / len(intervals)
         if mean_iv > 0:
-            std_iv = math.sqrt(sum((x - mean_iv) ** 2 for x in intervals) / len(intervals))
+            std_iv = math.sqrt(
+                sum((x - mean_iv) ** 2 for x in intervals) / len(intervals)
+            )
             cv_intervals = std_iv / mean_iv
 
     gini_score = _linear_interpolate(gini, cfg.gini_low, cfg.gini_high)
@@ -678,24 +717,29 @@ def score_trade_clustering(
             f"Gini {gini:.3f} > {cfg.gini_high}: trades clustered in narrow market regimes."
         )
     if cv_intervals is not None and cv_intervals < 0.2:
-        lines.append("Very low CV — trades are suspiciously evenly spaced (grid/mechanical system?).")
-        warnings.append(f"CV of intervals={cv_intervals:.3f}: near-mechanical trade spacing detected.")
+        lines.append(
+            "Very low CV — trades are suspiciously evenly spaced (grid/mechanical system?)."
+        )
+        warnings.append(
+            f"CV of intervals={cv_intervals:.3f}: near-mechanical trade spacing detected."
+        )
 
     return {
-        "score":          round(raw_score, 2),
-        "gini":           round(gini, 6),
-        "cv_intervals":   round(cv_intervals, 6) if cv_intervals is not None else None,
-        "num_trades":     len(parsed),
-        "num_buckets":    nb,
-        "bucket_counts":  bucket_counts,
+        "score": round(raw_score, 2),
+        "gini": round(gini, 6),
+        "cv_intervals": round(cv_intervals, 6) if cv_intervals is not None else None,
+        "num_trades": len(parsed),
+        "num_buckets": nb,
+        "bucket_counts": bucket_counts,
         "interpretation": " ".join(lines),
-        "warnings":       warnings,
+        "warnings": warnings,
     }
 
 
 # ---------------------------------------------------------------------------
 # Main entry-point
 # ---------------------------------------------------------------------------
+
 
 def detect_overfitting(
     pnl_list: Sequence[float],
@@ -745,9 +789,9 @@ def detect_overfitting(
     # Normalise weights to sum exactly to 1.0
     raw_weights = {
         "equity_smoothness": cfg.weight_smoothness,
-        "win_rate":          cfg.weight_win_rate,
-        "sharpe":            cfg.weight_sharpe,
-        "trade_clustering":  cfg.weight_clustering,
+        "win_rate": cfg.weight_win_rate,
+        "sharpe": cfg.weight_sharpe,
+        "trade_clustering": cfg.weight_clustering,
     }
     total_w = sum(raw_weights.values())
     if total_w == 0:
@@ -757,18 +801,18 @@ def detect_overfitting(
     # ------------------------------------------------------------------
     # Run individual factor scorers
     # ------------------------------------------------------------------
-    smoothness_result  = score_equity_smoothness(curve, cfg)
-    win_rate_result    = score_win_rate(data, cfg)
-    sharpe_result      = score_sharpe(data, cfg)
+    smoothness_result = score_equity_smoothness(curve, cfg)
+    win_rate_result = score_win_rate(data, cfg)
+    sharpe_result = score_sharpe(data, cfg)
 
     dates_input = trade_dates if trade_dates is not None else []
-    clustering_result  = score_trade_clustering(dates_input, cfg)
+    clustering_result = score_trade_clustering(dates_input, cfg)
 
     factor_scores = {
         "equity_smoothness": smoothness_result,
-        "win_rate":          win_rate_result,
-        "sharpe":            sharpe_result,
-        "trade_clustering":  clustering_result,
+        "win_rate": win_rate_result,
+        "sharpe": sharpe_result,
+        "trade_clustering": clustering_result,
     }
 
     # ------------------------------------------------------------------
@@ -776,20 +820,15 @@ def detect_overfitting(
     # ------------------------------------------------------------------
     raw_factor_scores = {
         "equity_smoothness": smoothness_result["score"],
-        "win_rate":          win_rate_result["score"],
-        "sharpe":            sharpe_result["score"],
-        "trade_clustering":  clustering_result["score"],
+        "win_rate": win_rate_result["score"],
+        "sharpe": sharpe_result["score"],
+        "trade_clustering": clustering_result["score"],
     }
 
-    composite = sum(
-        weights[k] * raw_factor_scores[k] for k in weights
-    )
+    composite = sum(weights[k] * raw_factor_scores[k] for k in weights)
     composite = _clamp(composite)
 
-    breakdown_pct = {
-        k: round(weights[k] * raw_factor_scores[k], 4)
-        for k in weights
-    }
+    breakdown_pct = {k: round(weights[k] * raw_factor_scores[k], 4) for k in weights}
 
     # ------------------------------------------------------------------
     # Deduplicate warnings
@@ -804,19 +843,22 @@ def detect_overfitting(
 
     # High-level composite warnings
     if composite >= 80:
-        all_warnings.insert(0,
+        all_warnings.insert(
+            0,
             "CRITICAL: Multiple strong overfitting signals detected. "
-            "Do not deploy this strategy without extensive out-of-sample validation."
+            "Do not deploy this strategy without extensive out-of-sample validation.",
         )
     elif composite >= 60:
-        all_warnings.insert(0,
+        all_warnings.insert(
+            0,
             "HIGH RISK: Significant overfitting indicators present. "
-            "Walk-forward or out-of-sample testing strongly recommended."
+            "Walk-forward or out-of-sample testing strongly recommended.",
         )
     elif composite >= 40:
-        all_warnings.insert(0,
+        all_warnings.insert(
+            0,
             "MODERATE RISK: Some suspicious characteristics. "
-            "Consider reducing parameter count and running robustness tests."
+            "Consider reducing parameter count and running robustness tests.",
         )
 
     # Interpret missing clustering data
@@ -828,34 +870,40 @@ def detect_overfitting(
 
     return {
         "overfitting_score": round(composite, 2),
-        "risk_tier":         _risk_tier(composite),
-        "factor_scores":     factor_scores,
-        "breakdown_pct": {
-            k: round(v, 4) for k, v in breakdown_pct.items()
-        },
+        "risk_tier": _risk_tier(composite),
+        "factor_scores": factor_scores,
+        "breakdown_pct": {k: round(v, 4) for k, v in breakdown_pct.items()},
         "all_warnings": all_warnings,
         "metadata": {
-            "num_trades":   len(data),
+            "num_trades": len(data),
             "weights_used": {k: round(v, 6) for k, v in weights.items()},
             "config_used": {
-                "r2_low":           cfg.r2_low,
-                "r2_high":          cfg.r2_high,
-                "win_rate_low":     cfg.win_rate_low,
-                "win_rate_high":    cfg.win_rate_high,
-                "sharpe_low":       cfg.sharpe_low,
-                "sharpe_high":      cfg.sharpe_high,
-                "gini_low":         cfg.gini_low,
-                "gini_high":        cfg.gini_high,
-                "trades_per_year":  cfg.trades_per_year,
-                "alpha":            cfg.alpha,
+                "r2_low": cfg.r2_low,
+                "r2_high": cfg.r2_high,
+                "win_rate_low": cfg.win_rate_low,
+                "win_rate_high": cfg.win_rate_high,
+                "sharpe_low": cfg.sharpe_low,
+                "sharpe_high": cfg.sharpe_high,
+                "gini_low": cfg.gini_low,
+                "gini_high": cfg.gini_high,
+                "trades_per_year": cfg.trades_per_year,
+                "alpha": cfg.alpha,
                 "clustering_buckets": cfg.clustering_buckets,
             },
             "config_descriptions": {
                 k: _CONFIG_DESCRIPTIONS.get(k, "")
                 for k in (
-                    "r2_low", "r2_high", "win_rate_low", "win_rate_high",
-                    "sharpe_low", "sharpe_high", "gini_low", "gini_high",
-                    "trades_per_year", "alpha", "clustering_buckets",
+                    "r2_low",
+                    "r2_high",
+                    "win_rate_low",
+                    "win_rate_high",
+                    "sharpe_low",
+                    "sharpe_high",
+                    "gini_low",
+                    "gini_high",
+                    "trades_per_year",
+                    "alpha",
+                    "clustering_buckets",
                 )
             },
         },

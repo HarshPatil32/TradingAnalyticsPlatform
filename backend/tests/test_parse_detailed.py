@@ -1,9 +1,13 @@
-from csv_analyzer import FreeTierLimitExceeded
 """Tests for parse_detailed() in csv_analyzer."""
+
 import pytest
 
-from csv_analyzer import parse_detailed, FREE_TIER_TRADE_LIMIT, analyze_uploaded_trades
-
+from csv_analyzer import (
+    FREE_TIER_TRADE_LIMIT,
+    FreeTierLimitExceeded,
+    analyze_uploaded_trades,
+    parse_detailed,
+)
 
 VALID_CSV = "date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,185.50,10\n2024-02-20,AAPL,SELL,195.20,10\n"
 
@@ -57,7 +61,9 @@ class TestParseDetailedColumnHandling:
         assert len(result) == 1
 
     def test_padded_headers(self):
-        csv_data = " date , symbol , action , price , shares \n2024-01-15,AAPL,BUY,185.50,10\n"
+        csv_data = (
+            " date , symbol , action , price , shares \n2024-01-15,AAPL,BUY,185.50,10\n"
+        )
         result = parse_detailed(csv_data)
         assert len(result) == 1
 
@@ -194,14 +200,16 @@ class TestParseDetailedSymbolValidation:
 
     def test_symbol_with_special_chars_raises(self):
         bad_symbols = [
-            "AAPL!",   # special char
-            "123",     # digits only
-            "AAPL.",   # trailing dot
-            "AA PL",   # space
+            "AAPL!",  # special char
+            "123",  # digits only
+            "AAPL.",  # trailing dot
+            "AA PL",  # space
             "A" * 21,  # too long
         ]
         for bad in bad_symbols:
-            csv_data = f"date,symbol,action,price,shares\n2024-01-15,{bad},BUY,185.50,10\n"
+            csv_data = (
+                f"date,symbol,action,price,shares\n2024-01-15,{bad},BUY,185.50,10\n"
+            )
             with pytest.raises(ValueError, match="invalid characters"):
                 parse_detailed(csv_data)
         # Empty string triggers 'symbol is blank'
@@ -224,8 +232,12 @@ class TestParseDetailedFreeTierLimit:
             f"2024-01-{(i % 28) + 1:02d},AAPL,BUY,100.00,1\n"
             for i in range(FREE_TIER_TRADE_LIMIT + 1)
         )
-        with pytest.raises(FreeTierLimitExceeded, match=f"exceeds the free tier limit of {FREE_TIER_TRADE_LIMIT}"):
+        with pytest.raises(
+            FreeTierLimitExceeded,
+            match=f"exceeds the free tier limit of {FREE_TIER_TRADE_LIMIT}",
+        ):
             parse_detailed(header + rows)
+
     def test_unrelated_value_error_not_caught_as_limit(self):
         # Missing required column should raise ValueError, not FreeTierLimitExceeded
         bad_csv = "date,symbol,action,price\n2024-01-15,AAPL,BUY,185.50\n"
@@ -318,7 +330,11 @@ class TestAnalyzeUploadedTradesDetailed:
     def test_no_data_quality_warnings_for_clean_trades(self):
         # Clean data produces no duplicate/pairing warnings; only the trade count and concentration warnings are expected
         result = analyze_uploaded_trades(self._VALID_CSV)
-        quality_warnings = [w for w in result["warnings"] if w["type"] not in {"insufficient_trade_count", "concentration_risk"}]
+        quality_warnings = [
+            w
+            for w in result["warnings"]
+            if w["type"] not in {"insufficient_trade_count", "concentration_risk"}
+        ]
         assert quality_warnings == []
         # Also check that the concentration warning is present
         assert any(w["type"] == "concentration_risk" for w in result["warnings"])
@@ -350,8 +366,7 @@ class TestAnalyzeUploadedTradesDetailed:
 
     def test_unmatched_sell_surfaces_as_warning(self):
         csv_data = (
-            "date,symbol,action,price,shares\n"
-            "2024-01-15,AAPL,SELL,195.20,10\n"
+            "date,symbol,action,price,shares\n" "2024-01-15,AAPL,SELL,195.20,10\n"
         )
         result = analyze_uploaded_trades(csv_data)
         assert any(w["type"] == "unmatched_sell" for w in result["warnings"])
@@ -360,6 +375,7 @@ class TestAnalyzeUploadedTradesDetailed:
 # ---------------------------------------------------------------------------
 # Trade count sufficiency warnings
 # ---------------------------------------------------------------------------
+
 
 def _make_closed_trades(n: int) -> str:
     """Generate CSV with n matched BUY+SELL pairs for AAPL."""
@@ -374,27 +390,39 @@ class TestTradeCountSufficiencyWarning:
 
     def test_fewer_than_30_closed_trades_warns(self):
         result = analyze_uploaded_trades(_make_closed_trades(5))
-        warning = next((w for w in result["warnings"] if w["type"] == "insufficient_trade_count"), None)
+        warning = next(
+            (w for w in result["warnings"] if w["type"] == "insufficient_trade_count"),
+            None,
+        )
         assert warning is not None
         assert warning["count"] == 5
 
     def test_29_closed_trades_warns(self):
         result = analyze_uploaded_trades(_make_closed_trades(29))
-        warning = next((w for w in result["warnings"] if w["type"] == "insufficient_trade_count"), None)
+        warning = next(
+            (w for w in result["warnings"] if w["type"] == "insufficient_trade_count"),
+            None,
+        )
         assert warning is not None
         assert warning["count"] == 29
 
     def test_exactly_30_closed_trades_no_warn(self):
         result = analyze_uploaded_trades(_make_closed_trades(30))
-        assert not any(w["type"] == "insufficient_trade_count" for w in result["warnings"])
+        assert not any(
+            w["type"] == "insufficient_trade_count" for w in result["warnings"]
+        )
 
     def test_more_than_30_closed_trades_no_warn(self):
         result = analyze_uploaded_trades(_make_closed_trades(31))
-        assert not any(w["type"] == "insufficient_trade_count" for w in result["warnings"])
+        assert not any(
+            w["type"] == "insufficient_trade_count" for w in result["warnings"]
+        )
 
     def test_warning_has_correct_structure(self):
         result = analyze_uploaded_trades(_make_closed_trades(1))
-        warning = next(w for w in result["warnings"] if w["type"] == "insufficient_trade_count")
+        warning = next(
+            w for w in result["warnings"] if w["type"] == "insufficient_trade_count"
+        )
         assert warning["level"] == "warning"
         assert "30" in warning["message"]
         assert warning["count"] == 1
@@ -403,7 +431,10 @@ class TestTradeCountSufficiencyWarning:
         # Only BUY rows — no closed trades
         csv_data = "date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,100.00,10\n"
         result = analyze_uploaded_trades(csv_data)
-        warning = next((w for w in result["warnings"] if w["type"] == "insufficient_trade_count"), None)
+        warning = next(
+            (w for w in result["warnings"] if w["type"] == "insufficient_trade_count"),
+            None,
+        )
         assert warning is not None
         assert warning["count"] == 0
 
@@ -411,23 +442,21 @@ class TestTradeCountSufficiencyWarning:
 def test_non_numeric_commission_per_trade_rejected(client):
     # Simulate a Flask test client POST with a non-numeric commission
     response = client.post(
-        '/analyze-trades',
-        json={
-            "csv_data": VALID_CSV,
-            "commission_per_trade": "notanumber"
-        }
+        "/analyze-trades",
+        json={"csv_data": VALID_CSV, "commission_per_trade": "notanumber"},
     )
     assert response.status_code == 400
-    assert "commission_per_trade must be a number" in response.get_json().get("error", "")
+    assert "commission_per_trade must be a number" in response.get_json().get(
+        "error", ""
+    )
 
 
 def test_negative_commission_per_trade_rejected(client):
     response = client.post(
-        '/analyze-trades',
-        json={
-            "csv_data": VALID_CSV,
-            "commission_per_trade": -5
-        }
+        "/analyze-trades", json={"csv_data": VALID_CSV, "commission_per_trade": -5}
     )
     assert response.status_code == 400
-    assert "commission_per_trade must be a non-negative number" in response.get_json().get("error", "")
+    assert (
+        "commission_per_trade must be a non-negative number"
+        in response.get_json().get("error", "")
+    )

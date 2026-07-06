@@ -1,8 +1,8 @@
 """Tests for parse_summary() in csv_analyzer."""
+
 import pytest
 
-from csv_analyzer import parse_summary, analyze_uploaded_trades
-
+from csv_analyzer import analyze_uploaded_trades, parse_summary
 
 VALID_CSV = (
     "initial_capital,final_balance,num_trades,win_rate,start_date,end_date\n"
@@ -78,17 +78,31 @@ class TestParseSummaryColumnHandling:
 
 class TestParseSummaryMissingFields:
     def _drop_col(self, field: str) -> str:
-        cols = ["initial_capital", "final_balance", "num_trades", "win_rate", "start_date", "end_date"]
+        cols = [
+            "initial_capital",
+            "final_balance",
+            "num_trades",
+            "win_rate",
+            "start_date",
+            "end_date",
+        ]
         vals = ["10000", "12000", "42", "0.6", "2024-01-01", "2024-12-31"]
         idx = cols.index(field)
         cols.pop(idx)
         vals.pop(idx)
         return ",".join(cols) + "\n" + ",".join(vals) + "\n"
 
-    @pytest.mark.parametrize("field", [
-        "initial_capital", "final_balance", "num_trades",
-        "win_rate", "start_date", "end_date",
-    ])
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "initial_capital",
+            "final_balance",
+            "num_trades",
+            "win_rate",
+            "start_date",
+            "end_date",
+        ],
+    )
     def test_missing_required_field_raises(self, field):
         with pytest.raises(ValueError, match="missing required fields"):
             parse_summary(self._drop_col(field))
@@ -99,7 +113,9 @@ class TestParseSummaryMissingFields:
 
     def test_header_only_raises(self):
         with pytest.raises(ValueError):
-            parse_summary("initial_capital,final_balance,num_trades,win_rate,start_date,end_date\n")
+            parse_summary(
+                "initial_capital,final_balance,num_trades,win_rate,start_date,end_date\n"
+            )
 
 
 class TestParseSummaryWinRate:
@@ -159,7 +175,9 @@ class TestParseSummaryDates:
 
 
 class TestParseSummaryNumericFields:
-    def _make_csv(self, initial: str = "10000", final: str = "12000", trades: str = "42") -> str:
+    def _make_csv(
+        self, initial: str = "10000", final: str = "12000", trades: str = "42"
+    ) -> str:
         return f"initial_capital,final_balance,num_trades,win_rate,start_date,end_date\n{initial},{final},{trades},0.6,2024-01-01,2024-12-31\n"
 
     def test_zero_initial_capital_raises(self):

@@ -1,30 +1,38 @@
 """Tests for the check_overtrading function."""
+
 import pytest
 
-from csv_analyzer import check_overtrading, OVERTRADING_COST_DRAG_THRESHOLD, MIN_TRADES_FOR_FREQUENCY_SIGNAL
+from csv_analyzer import (
+    MIN_TRADES_FOR_FREQUENCY_SIGNAL,
+    OVERTRADING_COST_DRAG_THRESHOLD,
+    check_overtrading,
+)
 
 # Shared cost dicts used across tests — realistic retail defaults
 COMMISSIONS = {"total_commission_usd": 5.0}
-SLIPPAGE    = {"total_slippage_usd":   8.0}
-SPREAD      = {"total_spread_usd":     2.0}
+SLIPPAGE = {"total_slippage_usd": 8.0}
+SPREAD = {"total_spread_usd": 2.0}
 TOTAL_COSTS = 15.0  # 5 + 8 + 2
 
 
 def _make_pnl(num_trades: int, total_pnl: float, span_days: int = 365) -> dict:
     """Build a minimal pnl_data dict with num_trades closed trades."""
     from datetime import date, timedelta
+
     start = date(2023, 1, 1)
     trades = []
     for i in range(num_trades):
-        buy  = start + timedelta(days=i * (span_days // max(num_trades, 1)))
+        buy = start + timedelta(days=i * (span_days // max(num_trades, 1)))
         sell = buy + timedelta(days=5)
-        trades.append({
-            "buy_date":       buy.strftime("%Y-%m-%d"),
-            "sell_date":      sell.strftime("%Y-%m-%d"),
-            "symbol":         "AAPL",
-            "pnl":            total_pnl / num_trades,
-            "cumulative_pnl": total_pnl * (i + 1) / num_trades,
-        })
+        trades.append(
+            {
+                "buy_date": buy.strftime("%Y-%m-%d"),
+                "sell_date": sell.strftime("%Y-%m-%d"),
+                "symbol": "AAPL",
+                "pnl": total_pnl / num_trades,
+                "cumulative_pnl": total_pnl * (i + 1) / num_trades,
+            }
+        )
     return {"trade_pnl": trades, "total_pnl": total_pnl}
 
 

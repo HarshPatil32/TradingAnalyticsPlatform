@@ -76,7 +76,7 @@ export default function BehavioralFlags({
               </h3>
               <p className="text-zinc-400 text-sm mb-4">
                 Your gross return was {fmtPct(grossReturnPct)}, but after accounting for all
-                costs, your net return dropped to {fmtPct(netReturnPct)}. Here's where the
+                costs, your net return dropped to {fmtPct(netReturnPct)}. Here&apos;s where the
                 money went:
               </p>
               <div className="border-t border-zinc-800">
@@ -112,7 +112,7 @@ export default function BehavioralFlags({
             <FlagIcon variant="warning" />
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-white mb-1">
-                You're trading more than your edge justifies
+                You&apos;re trading more than your edge justifies
               </h3>
               <p className="text-zinc-400 text-sm mb-2">
                 {overtradingWarning.message}

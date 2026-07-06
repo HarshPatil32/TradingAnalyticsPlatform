@@ -15,7 +15,7 @@ This backend is designed to be deployed on Render.com.
 
 - `GET /` - Health check
 - `GET /config` - Server configuration (e.g. `max_upload_bytes`)
-- `POST /webhookcallback` - Webhook callback  
+- `POST /webhookcallback` - Webhook callback
 - `GET /MACD-strategy` - MACD trading strategy backtest with optimization
 - `GET /spy-investment` - SPY investment comparison
 - `POST /analyze-trades` - Upload a CSV trade log or summary report (max 5 MB)
@@ -23,7 +23,7 @@ This backend is designed to be deployed on Render.com.
 ### MACD Strategy Parameters:
 - `stocks` - Comma-separated stock symbols (e.g., "AAPL,MSFT")
 - `start_date` - Start date in YYYY-MM-DD format
-- `end_date` - End date in YYYY-MM-DD format  
+- `end_date` - End date in YYYY-MM-DD format
 - `initial_balance` - Initial investment amount (default: 100000)
 - `optimize` - Whether to optimize parameters (default: true)
 

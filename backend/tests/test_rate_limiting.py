@@ -1,7 +1,10 @@
 """Tests for per-IP monthly rate limiting on /analyze-trades."""
-import pytest
+
 from unittest.mock import patch
-from app import app, MONTHLY_ANALYSIS_LIMIT
+
+import pytest
+
+from app import MONTHLY_ANALYSIS_LIMIT, app
 
 VALID_CSV = "Date,Symbol,Action,Quantity,Price\n2024-01-10,AAPL,BUY,10,150.00\n2024-01-20,AAPL,SELL,10,160.00\n"
 TEST_IP = "1.2.3.4"
@@ -16,8 +19,10 @@ def client():
 
 
 def _post_analysis(client, ip=TEST_IP, month=FIXED_MONTH):
-    with patch("app._get_client_ip", return_value=ip), \
-         patch("app._get_month_key", return_value=month):
+    with (
+        patch("app._get_client_ip", return_value=ip),
+        patch("app._get_month_key", return_value=month),
+    ):
         return client.post(
             "/analyze-trades",
             data={"file": (VALID_CSV.encode(), "trades.csv")},
