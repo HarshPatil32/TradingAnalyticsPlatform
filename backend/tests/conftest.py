@@ -4,6 +4,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+# Make backend/legacy and backend importable before any app imports
+_backend_dir = os.path.join(os.path.dirname(__file__), "..")
+sys.path.insert(0, os.path.join(_backend_dir, "legacy"))
+sys.path.insert(0, _backend_dir)
+
+# Set before any app import so validate_env_vars() is suppressed during tests
+os.environ.setdefault("TESTING", "1")
+
 if TYPE_CHECKING:
     from flask import Flask
 
@@ -12,13 +20,6 @@ if os.environ.get("SKIP_FLASK_APP", "0") == "1":
 else:
     from app import _rate_limit_lock, _rate_limit_store
     from app import app as flask_app
-
-# Set before any app import so validate_env_vars() is suppressed during tests
-os.environ.setdefault("TESTING", "1")
-
-# Make backend/legacy and backend importable from tests
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "legacy"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 @pytest.fixture

@@ -17,3 +17,7 @@ files = ["backend"]
 exclude = ["backend/legacy/"]
 ignore_missing_imports = true
 warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
