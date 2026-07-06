@@ -4,8 +4,10 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "cd frontend && npm ci",
   "git": {
-    "deploymentEnabled": true,
-    "*": false
+    "deploymentEnabled": {
+      "main": true,
+      "*": false
+    }
   },
   "headers": [
     {
