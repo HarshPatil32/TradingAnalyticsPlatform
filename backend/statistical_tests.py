@@ -24,7 +24,6 @@ from __future__ import annotations
 import logging
 import math
 import random
-import statistics
 from typing import Sequence
 
 logger = logging.getLogger(__name__)
@@ -33,11 +32,10 @@ logger = logging.getLogger(__name__)
 # Constants / defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_ALPHA: float = 0.05          # significance level (two-tailed)
-DEFAULT_MIN_TRADES: int = 30         # minimum trade count for reliable inference
+DEFAULT_ALPHA: float = 0.05  # significance level (two-tailed)
+DEFAULT_MIN_TRADES: int = 30  # minimum trade count for reliable inference
 DEFAULT_BOOTSTRAP_ITERS: int = 10_000
 DEFAULT_CI_LEVEL: float = 0.95
-
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +65,7 @@ VERDICT_DESCRIPTIONS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _mean(data: list[float]) -> float:
     return sum(data) / len(data)
@@ -218,6 +217,7 @@ def _percentile(data: list[float], pct: float) -> float:
 # Individual tests
 # ---------------------------------------------------------------------------
 
+
 def check_min_trade_count(
     n: int,
     min_trades: int = DEFAULT_MIN_TRADES,
@@ -276,13 +276,10 @@ def ttest_vs_zero(
     significant = p_val < alpha
 
     direction = "positive" if mean_pnl > 0 else "negative"
-    interp = (
-        f"Mean P&L={mean_pnl:.4f}, t={t_stat:.3f}, p={p_val:.4f}. "
-        + (
-            f"Result IS significant (p < {alpha}): strategy has a {direction} edge vs random."
-            if significant
-            else f"Result is NOT significant (p >= {alpha}): cannot rule out random chance."
-        )
+    interp = f"Mean P&L={mean_pnl:.4f}, t={t_stat:.3f}, p={p_val:.4f}. " + (
+        f"Result IS significant (p < {alpha}): strategy has a {direction} edge vs random."
+        if significant
+        else f"Result is NOT significant (p >= {alpha}): cannot rule out random chance."
     )
 
     return {
@@ -383,18 +380,15 @@ def sharpe_significance(
             "interpretation": "Zero standard deviation — Sharpe ratio undefined.",
         }
 
-    sharpe = mean_excess / std_excess          # per-trade Sharpe
-    t_stat = sharpe * math.sqrt(n)             # significance statistic
+    sharpe = mean_excess / std_excess  # per-trade Sharpe
+    t_stat = sharpe * math.sqrt(n)  # significance statistic
     p_val = _two_tail_p_value(t_stat, df=n - 1)
     significant = p_val < alpha
 
-    interp = (
-        f"Per-trade Sharpe={sharpe:.4f}, t={t_stat:.3f}, p={p_val:.4f}. "
-        + (
-            f"Sharpe IS significantly different from zero (p < {alpha})."
-            if significant
-            else f"Sharpe is NOT significantly different from zero (p >= {alpha})."
-        )
+    interp = f"Per-trade Sharpe={sharpe:.4f}, t={t_stat:.3f}, p={p_val:.4f}. " + (
+        f"Sharpe IS significantly different from zero (p < {alpha})."
+        if significant
+        else f"Sharpe is NOT significantly different from zero (p >= {alpha})."
     )
 
     return {
@@ -461,6 +455,7 @@ def winrate_binomial_test(
 # Main entry-point
 # ---------------------------------------------------------------------------
 
+
 def run_significance_tests(
     pnl_list: Sequence[float],
     alpha: float = DEFAULT_ALPHA,
@@ -510,7 +505,9 @@ def run_significance_tests(
                 "few lucky or unlucky trades."
             ),
             "ttest": ttest_vs_zero(pnl, alpha),
-            "bootstrap_ci": bootstrap_confidence_interval(pnl, ci_level, bootstrap_iters, bootstrap_seed),
+            "bootstrap_ci": bootstrap_confidence_interval(
+                pnl, ci_level, bootstrap_iters, bootstrap_seed
+            ),
             "sharpe": sharpe_significance(pnl, risk_free_per_trade, alpha),
             "winrate": winrate_binomial_test(pnl, 0.5, alpha),
             "warnings": warnings,
@@ -594,7 +591,6 @@ def run_significance_tests(
     }
 
 
-
 def plain_english_verdict(
     pnl_list: Sequence[float],
     alpha: float = DEFAULT_ALPHA,
@@ -607,11 +603,12 @@ def plain_english_verdict(
     "not enough trades to know yet"        — too few trades, or no significant edge
     "your win rate looks like a real edge" — t-test and bootstrap CI both confirm significance
     """
-    result = run_significance_tests(pnl_list, alpha=alpha, min_trades=min_trades, **kwargs)
+    result = run_significance_tests(
+        pnl_list, alpha=alpha, min_trades=min_trades, **kwargs
+    )
     if result["verdict"] == "SIGNIFICANT":
         return VERDICT_REAL_EDGE
     return VERDICT_NOT_ENOUGH
-
 
 
 def _skewness(data: list[float]) -> float:
@@ -623,7 +620,7 @@ def _skewness(data: list[float]) -> float:
     s = _std(data, ddof=1)
     if s == 0:
         return 0.0
-    return (sum((x - m) ** 3 for x in data) / n) / (s ** 3)
+    return (sum((x - m) ** 3 for x in data) / n) / (s**3)
 
 
 # ---------------------------------------------------------------------------
@@ -634,10 +631,43 @@ if __name__ == "__main__":
     import json
 
     # --- Example 1: clearly profitable strategy ---
-    winning_trades = [12.5, 8.3, -3.1, 15.2, 9.8, -2.4, 11.0, 7.6, -1.8, 14.3,
-                      10.5, 6.2, -4.0, 13.1, 8.9, -2.9, 12.0, 9.3, -3.5, 11.7,
-                      7.8, -1.5, 14.9, 10.2, 8.1, -2.2, 13.5, 9.7, -3.8, 12.3,
-                      11.1, 6.9, -2.6, 15.0, 8.5]
+    winning_trades = [
+        12.5,
+        8.3,
+        -3.1,
+        15.2,
+        9.8,
+        -2.4,
+        11.0,
+        7.6,
+        -1.8,
+        14.3,
+        10.5,
+        6.2,
+        -4.0,
+        13.1,
+        8.9,
+        -2.9,
+        12.0,
+        9.3,
+        -3.5,
+        11.7,
+        7.8,
+        -1.5,
+        14.9,
+        10.2,
+        8.1,
+        -2.2,
+        13.5,
+        9.7,
+        -3.8,
+        12.3,
+        11.1,
+        6.9,
+        -2.6,
+        15.0,
+        8.5,
+    ]
 
     print("=" * 60)
     print("EXAMPLE 1 — Consistently profitable strategy")
@@ -646,7 +676,6 @@ if __name__ == "__main__":
     print(json.dumps(result, indent=2))
 
     # --- Example 2: random noise ---
-    import math as _math
     rng = random.Random(99)
     noise_trades = [rng.gauss(0, 10) for _ in range(35)]
 

@@ -11,8 +11,6 @@ import io
 import textwrap
 from datetime import datetime, timedelta
 
-import pytest
-
 from overfitting_detector import OverfittingConfig, detect_overfitting
 
 # ---------------------------------------------------------------------------
@@ -20,7 +18,8 @@ from overfitting_detector import OverfittingConfig, detect_overfitting
 # ---------------------------------------------------------------------------
 
 # 50 trades across 2023 — ~58 % win rate, realistic drawdowns, distributed dates
-_HEALTHY_CSV = textwrap.dedent("""\
+_HEALTHY_CSV = textwrap.dedent(
+    """\
     date,symbol,pnl
     2023-01-03,AAPL,2.10
     2023-01-06,AAPL,-1.40
@@ -72,10 +71,12 @@ _HEALTHY_CSV = textwrap.dedent("""\
     2023-11-01,AAPL,1.35
     2023-11-08,MSFT,-1.00
     2023-11-15,GOOG,2.05
-""")
+"""
+)
 
 # 50 trades — 90 % win rate, near-uniform gains, very smooth equity curve
-_OVERFIT_CSV = textwrap.dedent("""\
+_OVERFIT_CSV = textwrap.dedent(
+    """\
     date,symbol,pnl
     2023-01-03,AAPL,1.00
     2023-01-04,AAPL,1.01
@@ -127,11 +128,13 @@ _OVERFIT_CSV = textwrap.dedent("""\
     2023-03-13,AAPL,1.00
     2023-03-14,AAPL,1.01
     2023-03-15,AAPL,1.00
-""")
+"""
+)
 
 # 6 trades with an explicit cumulative equity column for override testing.
 # The pnl series is jagged but the equity column is perfectly linear.
-_EXPLICIT_EQUITY_CSV = textwrap.dedent("""\
+_EXPLICIT_EQUITY_CSV = textwrap.dedent(
+    """\
     date,pnl,equity
     2023-01-03,1.5,10.0
     2023-01-05,-0.5,20.0
@@ -139,23 +142,29 @@ _EXPLICIT_EQUITY_CSV = textwrap.dedent("""\
     2023-01-15,-0.5,40.0
     2023-01-20,1.5,50.0
     2023-01-25,-0.5,60.0
-""")
+"""
+)
 
 # Summary-format CSVs (aggregate stats, one data row each)
-_HEALTHY_SUMMARY_CSV = textwrap.dedent("""\
+_HEALTHY_SUMMARY_CSV = textwrap.dedent(
+    """\
     initial_capital,final_balance,num_trades,win_rate,start_date,end_date
     10000,11820,50,0.58,2023-01-03,2023-11-15
-""")
+"""
+)
 
-_SUSPICIOUS_SUMMARY_CSV = textwrap.dedent("""\
+_SUSPICIOUS_SUMMARY_CSV = textwrap.dedent(
+    """\
     initial_capital,final_balance,num_trades,win_rate,start_date,end_date
     10000,14750,50,0.94,2023-01-03,2023-03-15
-""")
+"""
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_trade_csv(csv_str: str) -> tuple[list[float], list[str]]:
     """Parse a per-trade CSV with 'date' and 'pnl' columns."""
@@ -175,11 +184,11 @@ def _parse_summary_csv(csv_str: str) -> dict:
     row = rows[0]
     return {
         "initial_capital": float(row["initial_capital"]),
-        "final_balance":   float(row["final_balance"]),
-        "num_trades":      int(row["num_trades"]),
-        "win_rate":        float(row["win_rate"]),
-        "start_date":      row["start_date"].strip(),
-        "end_date":        row["end_date"].strip(),
+        "final_balance": float(row["final_balance"]),
+        "num_trades": int(row["num_trades"]),
+        "win_rate": float(row["win_rate"]),
+        "start_date": row["start_date"].strip(),
+        "end_date": row["end_date"].strip(),
     }
 
 
@@ -196,7 +205,7 @@ def _synthetic_pnl_from_summary(summary: dict) -> tuple[list[float], list[str]]:
     losses = n - wins
 
     if wins > 0 and losses > 0:
-        per_win  = total_return / wins * 1.5
+        per_win = total_return / wins * 1.5
         per_loss = -(total_return / losses * 0.5)
     elif wins > 0:
         per_win, per_loss = total_return / wins, 0.0
@@ -206,13 +215,10 @@ def _synthetic_pnl_from_summary(summary: dict) -> tuple[list[float], list[str]]:
     pnl_list = [per_win] * wins + [per_loss] * losses
 
     start = datetime.strptime(summary["start_date"], "%Y-%m-%d").date()
-    end   = datetime.strptime(summary["end_date"],   "%Y-%m-%d").date()
-    span  = (end - start).days
-    step  = max(1, span // n)
-    trade_dates = [
-        (start + timedelta(days=i * step)).isoformat()
-        for i in range(n)
-    ]
+    end = datetime.strptime(summary["end_date"], "%Y-%m-%d").date()
+    span = (end - start).days
+    step = max(1, span // n)
+    trade_dates = [(start + timedelta(days=i * step)).isoformat() for i in range(n)]
 
     return pnl_list, trade_dates
 
@@ -220,6 +226,7 @@ def _synthetic_pnl_from_summary(summary: dict) -> tuple[list[float], list[str]]:
 # ---------------------------------------------------------------------------
 # Tests — detailed list CSV format (one row per trade)
 # ---------------------------------------------------------------------------
+
 
 class TestDetectOverfittingDetailedCsv:
     """detect_overfitting() fed from a per-trade CSV (detailed list format)."""
@@ -229,11 +236,11 @@ class TestDetectOverfittingDetailedCsv:
         result = detect_overfitting(pnl_list=pnl, trade_dates=dates)
 
         assert "overfitting_score" in result
-        assert "risk_tier"         in result
-        assert "factor_scores"     in result
-        assert "breakdown_pct"     in result
-        assert "all_warnings"      in result
-        assert "metadata"          in result
+        assert "risk_tier" in result
+        assert "factor_scores" in result
+        assert "breakdown_pct" in result
+        assert "all_warnings" in result
+        assert "metadata" in result
 
     def test_healthy_strategy_score_is_float_in_valid_range(self):
         pnl, dates = _parse_trade_csv(_HEALTHY_CSV)
@@ -246,7 +253,12 @@ class TestDetectOverfittingDetailedCsv:
         pnl, dates = _parse_trade_csv(_HEALTHY_CSV)
         factors = detect_overfitting(pnl_list=pnl, trade_dates=dates)["factor_scores"]
 
-        assert set(factors.keys()) == {"equity_smoothness", "win_rate", "sharpe", "trade_clustering"}
+        assert set(factors.keys()) == {
+            "equity_smoothness",
+            "win_rate",
+            "sharpe",
+            "trade_clustering",
+        }
         for factor_result in factors.values():
             assert "score" in factor_result
             assert 0.0 <= factor_result["score"] <= 100.0
@@ -277,36 +289,48 @@ class TestDetectOverfittingDetailedCsv:
         healthy_pnl, healthy_dates = _parse_trade_csv(_HEALTHY_CSV)
         overfit_pnl, overfit_dates = _parse_trade_csv(_OVERFIT_CSV)
 
-        healthy_score = detect_overfitting(pnl_list=healthy_pnl, trade_dates=healthy_dates)["overfitting_score"]
-        overfit_score = detect_overfitting(pnl_list=overfit_pnl, trade_dates=overfit_dates)["overfitting_score"]
+        healthy_score = detect_overfitting(
+            pnl_list=healthy_pnl, trade_dates=healthy_dates
+        )["overfitting_score"]
+        overfit_score = detect_overfitting(
+            pnl_list=overfit_pnl, trade_dates=overfit_dates
+        )["overfitting_score"]
 
         assert overfit_score > healthy_score
 
     def test_overfit_strategy_win_rate_factor_is_elevated(self):
         pnl, dates = _parse_trade_csv(_OVERFIT_CSV)
-        win_rate_score = detect_overfitting(pnl_list=pnl, trade_dates=dates)["factor_scores"]["win_rate"]["score"]
+        win_rate_score = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "factor_scores"
+        ]["win_rate"]["score"]
 
         assert win_rate_score > 0
 
     def test_overfit_strategy_equity_smoothness_is_flagged(self):
         pnl, dates = _parse_trade_csv(_OVERFIT_CSV)
-        smoothness_score = detect_overfitting(pnl_list=pnl, trade_dates=dates)["factor_scores"]["equity_smoothness"]["score"]
+        smoothness_score = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "factor_scores"
+        ]["equity_smoothness"]["score"]
 
         assert smoothness_score > 0
 
     def test_overfit_strategy_produces_warnings(self):
         pnl, dates = _parse_trade_csv(_OVERFIT_CSV)
-        all_warnings = detect_overfitting(pnl_list=pnl, trade_dates=dates)["all_warnings"]
+        all_warnings = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "all_warnings"
+        ]
 
         assert len(all_warnings) > 0
 
     def test_clustering_factor_populated_only_when_dates_provided(self):
         pnl, dates = _parse_trade_csv(_HEALTHY_CSV)
 
-        result_with    = detect_overfitting(pnl_list=pnl, trade_dates=dates)
+        result_with = detect_overfitting(pnl_list=pnl, trade_dates=dates)
         result_without = detect_overfitting(pnl_list=pnl)
 
-        assert result_with["factor_scores"]["trade_clustering"]["num_trades"] == len(dates)
+        assert result_with["factor_scores"]["trade_clustering"]["num_trades"] == len(
+            dates
+        )
         assert result_without["factor_scores"]["trade_clustering"]["num_trades"] == 0
 
     def test_breakdown_pct_components_sum_to_overfitting_score(self):
@@ -318,28 +342,34 @@ class TestDetectOverfittingDetailedCsv:
 
     def test_weights_in_metadata_sum_to_one(self):
         pnl, dates = _parse_trade_csv(_HEALTHY_CSV)
-        weights = detect_overfitting(pnl_list=pnl, trade_dates=dates)["metadata"]["weights_used"]
+        weights = detect_overfitting(pnl_list=pnl, trade_dates=dates)["metadata"][
+            "weights_used"
+        ]
 
         assert abs(sum(weights.values()) - 1.0) < 1e-9
 
     def test_win_rate_factor_wins_match_csv_positive_pnl_count(self):
         pnl, dates = _parse_trade_csv(_HEALTHY_CSV)
         expected_wins = sum(1 for p in pnl if p > 0)
-        wins_reported = detect_overfitting(pnl_list=pnl, trade_dates=dates)["factor_scores"]["win_rate"]["wins"]
+        wins_reported = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "factor_scores"
+        ]["win_rate"]["wins"]
 
         assert wins_reported == expected_wins
 
     def test_sharpe_factor_exposes_annualised_and_per_trade_values(self):
         pnl, dates = _parse_trade_csv(_HEALTHY_CSV)
-        sharpe_factor = detect_overfitting(pnl_list=pnl, trade_dates=dates)["factor_scores"]["sharpe"]
+        sharpe_factor = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "factor_scores"
+        ]["sharpe"]
 
         assert "annualised_sharpe" in sharpe_factor
-        assert "per_trade_sharpe"  in sharpe_factor
+        assert "per_trade_sharpe" in sharpe_factor
 
     def test_explicit_equity_curve_overrides_pnl_reconstruction(self):
         """Passing equity_curve from the CSV takes precedence over reconstruction from pnl."""
-        rows   = list(csv.DictReader(io.StringIO(_EXPLICIT_EQUITY_CSV.strip())))
-        pnl    = [float(r["pnl"])    for r in rows]
+        rows = list(csv.DictReader(io.StringIO(_EXPLICIT_EQUITY_CSV.strip())))
+        pnl = [float(r["pnl"]) for r in rows]
         equity = [float(r["equity"]) for r in rows]
 
         # [10,20,30,40,50,60] is perfectly linear → R² = 1.0 → full smoothness score
@@ -357,6 +387,7 @@ class TestDetectOverfittingDetailedCsv:
 # Tests — summary dict CSV format (aggregate stats → synthetic pnl)
 # ---------------------------------------------------------------------------
 
+
 class TestDetectOverfittingSummaryDict:
     """
     detect_overfitting() fed from a summary-format CSV.
@@ -370,8 +401,8 @@ class TestDetectOverfittingSummaryDict:
         result = detect_overfitting(pnl_list=pnl, trade_dates=dates)
 
         assert "overfitting_score" in result
-        assert "risk_tier"         in result
-        assert "factor_scores"     in result
+        assert "risk_tier" in result
+        assert "factor_scores" in result
 
     def test_healthy_summary_trade_count_matches_summary_field(self):
         summary = _parse_summary_csv(_HEALTHY_SUMMARY_CSV)
@@ -388,14 +419,20 @@ class TestDetectOverfittingSummaryDict:
         assert 0.0 <= score <= 100.0
 
     def test_suspicious_summary_scores_higher_than_healthy(self):
-        healthy_summary    = _parse_summary_csv(_HEALTHY_SUMMARY_CSV)
+        healthy_summary = _parse_summary_csv(_HEALTHY_SUMMARY_CSV)
         suspicious_summary = _parse_summary_csv(_SUSPICIOUS_SUMMARY_CSV)
 
-        healthy_pnl,    healthy_dates    = _synthetic_pnl_from_summary(healthy_summary)
-        suspicious_pnl, suspicious_dates = _synthetic_pnl_from_summary(suspicious_summary)
+        healthy_pnl, healthy_dates = _synthetic_pnl_from_summary(healthy_summary)
+        suspicious_pnl, suspicious_dates = _synthetic_pnl_from_summary(
+            suspicious_summary
+        )
 
-        healthy_score    = detect_overfitting(pnl_list=healthy_pnl,    trade_dates=healthy_dates)["overfitting_score"]
-        suspicious_score = detect_overfitting(pnl_list=suspicious_pnl, trade_dates=suspicious_dates)["overfitting_score"]
+        healthy_score = detect_overfitting(
+            pnl_list=healthy_pnl, trade_dates=healthy_dates
+        )["overfitting_score"]
+        suspicious_score = detect_overfitting(
+            pnl_list=suspicious_pnl, trade_dates=suspicious_dates
+        )["overfitting_score"]
 
         assert suspicious_score > healthy_score
 
@@ -413,14 +450,18 @@ class TestDetectOverfittingSummaryDict:
     def test_suspicious_summary_win_rate_factor_has_warnings(self):
         summary = _parse_summary_csv(_SUSPICIOUS_SUMMARY_CSV)
         pnl, dates = _synthetic_pnl_from_summary(summary)
-        wr_warnings = detect_overfitting(pnl_list=pnl, trade_dates=dates)["factor_scores"]["win_rate"]["warnings"]
+        wr_warnings = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "factor_scores"
+        ]["win_rate"]["warnings"]
 
         assert len(wr_warnings) > 0
 
     def test_summary_date_range_drives_clustering_trade_count(self):
         summary = _parse_summary_csv(_HEALTHY_SUMMARY_CSV)
         pnl, dates = _synthetic_pnl_from_summary(summary)
-        clustering = detect_overfitting(pnl_list=pnl, trade_dates=dates)["factor_scores"]["trade_clustering"]
+        clustering = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "factor_scores"
+        ]["trade_clustering"]
 
         assert clustering["num_trades"] == summary["num_trades"]
         assert clustering["num_buckets"] == 10  # default bucket count
@@ -428,7 +469,9 @@ class TestDetectOverfittingSummaryDict:
     def test_all_warnings_is_a_list(self):
         summary = _parse_summary_csv(_HEALTHY_SUMMARY_CSV)
         pnl, dates = _synthetic_pnl_from_summary(summary)
-        all_warnings = detect_overfitting(pnl_list=pnl, trade_dates=dates)["all_warnings"]
+        all_warnings = detect_overfitting(pnl_list=pnl, trade_dates=dates)[
+            "all_warnings"
+        ]
 
         assert isinstance(all_warnings, list)
 
@@ -444,9 +487,18 @@ class TestDetectOverfittingSummaryDict:
     def test_config_used_exposed_in_metadata(self):
         summary = _parse_summary_csv(_HEALTHY_SUMMARY_CSV)
         pnl, dates = _synthetic_pnl_from_summary(summary)
-        cfg_used = detect_overfitting(pnl_list=pnl, trade_dates=dates)["metadata"]["config_used"]
+        cfg_used = detect_overfitting(pnl_list=pnl, trade_dates=dates)["metadata"][
+            "config_used"
+        ]
 
-        for key in ("r2_low", "r2_high", "win_rate_low", "win_rate_high", "sharpe_low", "sharpe_high"):
+        for key in (
+            "r2_low",
+            "r2_high",
+            "win_rate_low",
+            "win_rate_high",
+            "sharpe_low",
+            "sharpe_high",
+        ):
             assert key in cfg_used
 
     def test_stricter_win_rate_config_raises_score_for_moderate_win_rate(self):
@@ -461,7 +513,11 @@ class TestDetectOverfittingSummaryDict:
         # Default win_rate_low=0.60 → 58 % is below threshold → win-rate score = 0
 
         stricter_config = OverfittingConfig(win_rate_low=0.40, win_rate_high=0.65)
-        stricter_result = detect_overfitting(pnl_list=pnl, trade_dates=dates, config=stricter_config)
+        stricter_result = detect_overfitting(
+            pnl_list=pnl, trade_dates=dates, config=stricter_config
+        )
         # Stricter win_rate_low=0.40 → 58 % is inside the suspicious band → win-rate score > 0
 
-        assert stricter_result["overfitting_score"] > default_result["overfitting_score"]
+        assert (
+            stricter_result["overfitting_score"] > default_result["overfitting_score"]
+        )

@@ -1,29 +1,54 @@
 """Smoke tests for the three analysis modules with minimum viable input."""
-import pytest
 
-from statistical_tests import run_significance_tests
-from overfitting_detector import detect_overfitting
-from transaction_costs import calculate_real_costs
 from csv_analyzer import check_disposition_effect
+from overfitting_detector import detect_overfitting
+from statistical_tests import run_significance_tests
+from transaction_costs import calculate_real_costs
+
 # Fixtures
 
 ONE_TRADE_PNL = [5.0]
-ZERO_TRADES_PNL = []
+ZERO_TRADES_PNL: list[float] = []
 NEGATIVE_PNL = [-3.0, -2.5, -1.8]
 
-ZERO_TRADES_LIST = []
+ZERO_TRADES_LIST: list[dict] = []
 
 ONE_TRADE_DETAILED = [
-    {"date": "2024-01-15", "symbol": "AAPL", "action": "BUY",  "price": 185.50, "shares": 10},
-    {"date": "2024-02-20", "symbol": "AAPL", "action": "SELL", "price": 195.20, "shares": 10},
+    {
+        "date": "2024-01-15",
+        "symbol": "AAPL",
+        "action": "BUY",
+        "price": 185.50,
+        "shares": 10,
+    },
+    {
+        "date": "2024-02-20",
+        "symbol": "AAPL",
+        "action": "SELL",
+        "price": 195.20,
+        "shares": 10,
+    },
 ]
 
 NEGATIVE_TRADE_DETAILED = [
-    {"date": "2024-01-15", "symbol": "AAPL", "action": "BUY",  "price": 200.0, "shares": 10},
-    {"date": "2024-02-20", "symbol": "AAPL", "action": "SELL", "price": 185.0, "shares": 10},
+    {
+        "date": "2024-01-15",
+        "symbol": "AAPL",
+        "action": "BUY",
+        "price": 200.0,
+        "shares": 10,
+    },
+    {
+        "date": "2024-02-20",
+        "symbol": "AAPL",
+        "action": "SELL",
+        "price": 185.0,
+        "shares": 10,
+    },
 ]
 
 # statistical_tests — run_significance_tests
+
 
 class TestRunSignificanceTestsEdgeCases:
     def test_zero_trades_returns_dict(self):
@@ -64,6 +89,7 @@ class TestRunSignificanceTestsEdgeCases:
 
 
 # overfitting_detector — detect_overfitting
+
 
 class TestDetectOverfittingEdgeCases:
     def test_zero_trades_returns_dict(self):
@@ -110,6 +136,7 @@ class TestDetectOverfittingEdgeCases:
 
 # transaction_costs — calculate_real_costs
 
+
 class TestCalculateRealCostsEdgeCases:
     def test_zero_trades_returns_dict(self):
         result = calculate_real_costs(ZERO_TRADES_LIST, account_size=10_000)
@@ -151,10 +178,11 @@ class TestCalculateRealCostsEdgeCases:
 
 # Helper to build minimal pnl_data for disposition effect tests
 def _make_pnl_data(avg_winner_days, avg_loser_days, num_winners=3, num_losers=3):
-    trade_pnl = (
-        [{"pnl": 1.0, "buy_date": "2024-01-01", "sell_date": "2024-01-01"}] * num_winners
-        + [{"pnl": -1.0, "buy_date": "2024-01-01", "sell_date": "2024-01-01"}] * num_losers
-    )
+    trade_pnl = [
+        {"pnl": 1.0, "buy_date": "2024-01-01", "sell_date": "2024-01-01"}
+    ] * num_winners + [
+        {"pnl": -1.0, "buy_date": "2024-01-01", "sell_date": "2024-01-01"}
+    ] * num_losers
     return {
         "trade_pnl": trade_pnl,
         "avg_holding_days_winners": avg_winner_days,

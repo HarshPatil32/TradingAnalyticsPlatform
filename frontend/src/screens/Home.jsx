@@ -20,7 +20,7 @@ export default function Home({ onAnalyze }) {
             Trade Analyzer
           </h1>
           <p className="text-lg text-zinc-400">
-            Upload your trades. Find out why you're really winning or losing.
+            Upload your trades. Find out why you&apos;re really winning or losing.
           </p>
         </div>
 

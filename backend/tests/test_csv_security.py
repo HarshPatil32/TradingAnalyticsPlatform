@@ -1,9 +1,12 @@
 """Tests for CSV upload security: content safety and filename sanitization."""
+
 import io
+
 import pytest
 
+from app import _MAX_UPLOAD_BYTES, _safe_filename
+from app import app as flask_app
 from csv_analyzer import _assert_content_safe, sanitize_csv
-from app import app as flask_app, _safe_filename, _MAX_UPLOAD_BYTES
 
 
 @pytest.fixture()
@@ -16,6 +19,7 @@ def client():
 # ---------------------------------------------------------------------------
 # _assert_content_safe — content-level checks
 # ---------------------------------------------------------------------------
+
 
 class TestAssertContentSafe:
     def test_null_byte_raises(self):
@@ -66,7 +70,9 @@ class TestAssertContentSafe:
             _assert_content_safe(payload)
 
     def test_clean_csv_passes(self):
-        _assert_content_safe("date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,185.50,10\n")
+        _assert_content_safe(
+            "date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,185.50,10\n"
+        )
 
     def test_empty_string_passes(self):
         _assert_content_safe("")
@@ -92,10 +98,11 @@ class TestAssertContentSafe:
 # sanitize_csv — safety gate is called first, and return value is correct
 # ---------------------------------------------------------------------------
 
+
 class TestSanitizeCsvSafetyGate:
     def test_formula_injection_blocked_before_sanitize(self):
         with pytest.raises(ValueError):
-            sanitize_csv("date,symbol\n2024-01-01,=HYPERLINK(\"evil.com\")")
+            sanitize_csv('date,symbol\n2024-01-01,=HYPERLINK("evil.com")')
 
     def test_binary_blocked_before_sanitize(self):
         with pytest.raises(ValueError):
@@ -142,6 +149,7 @@ class TestSanitizeCsvSafetyGate:
 # _safe_filename — filename sanitization
 # ---------------------------------------------------------------------------
 
+
 class TestSafeFilename:
     def test_path_traversal_stripped(self):
         result = _safe_filename("../../../etc/passwd.csv")
@@ -172,6 +180,7 @@ class TestSafeFilename:
 # /analyze-trades route — integration
 # ---------------------------------------------------------------------------
 
+
 class TestAnalyzeBacktestRoute:
     def test_clean_json_upload_returns_200(self, client):
         csv_data = "date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,185.50,10\n"
@@ -186,35 +195,47 @@ class TestAnalyzeBacktestRoute:
     def test_binary_file_upload_returns_400(self, client):
         payload = b"\x7fELF\x02\x01\x01\x00"
         data = {"file": (io.BytesIO(payload), "malware.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code == 400
 
     def test_path_traversal_filename_returns_400(self, client):
         data = {"file": (io.BytesIO(b"date,symbol\n"), "../../etc/passwd")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         # secure_filename reduces this to 'passwd' which is valid, so it proceeds past filename check.
         # The important thing is it does NOT return a server error from path operations.
         assert resp.status_code in (200, 400)
 
     def test_empty_filename_returns_400(self, client):
         data = {"file": (io.BytesIO(b"date,symbol\n"), "../../")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code == 400
 
     def test_empty_file_body_returns_400(self, client):
         data = {"file": (io.BytesIO(b""), "empty.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code == 400
         assert "empty" in resp.get_json()["error"].lower()
 
     def test_whitespace_only_file_returns_400(self, client):
         data = {"file": (io.BytesIO(b"   \n  "), "blank.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code == 400
         assert "empty" in resp.get_json()["error"].lower()
 
     def test_wrong_content_type_returns_400(self, client):
-        resp = client.post("/analyze-trades", data="plain text", content_type="text/plain")
+        resp = client.post(
+            "/analyze-trades", data="plain text", content_type="text/plain"
+        )
         assert resp.status_code == 400
 
     def test_non_string_csv_data_returns_400(self, client):
@@ -225,7 +246,9 @@ class TestAnalyzeBacktestRoute:
         # Send a file larger than the 5 MB framework limit
         large_data = b"x" * (_MAX_UPLOAD_BYTES + 1)
         data = {"file": (io.BytesIO(large_data), "big.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code == 413
 
     def test_upload_at_exact_limit_not_rejected_by_framework(self, client):
@@ -233,7 +256,9 @@ class TestAnalyzeBacktestRoute:
         # Note: multipart framing adds overhead, so exactly _MAX_UPLOAD_BYTES of file
         # data would still push the total request over the limit. Use a small payload.
         data = {"file": (io.BytesIO(b"date,symbol\n2024-01-01,AAPL\n"), "small.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code != 413
 
     def test_upload_one_byte_below_limit_not_rejected(self, client):
@@ -242,7 +267,9 @@ class TestAnalyzeBacktestRoute:
         # request ceiling while still exercising the near-limit boundary.
         just_under = b"x" * (_MAX_UPLOAD_BYTES - 1024)
         data = {"file": (io.BytesIO(just_under), "boundary.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code != 413
 
     def test_oversized_upload_no_content_length_returns_413(self, client):
@@ -261,9 +288,15 @@ class TestAnalyzeBacktestRoute:
 
     def test_latin1_encoded_file_upload_accepted(self, client):
         # A file encoded in latin-1 (not UTF-8) must be decoded and processed without error.
-        csv_bytes = "date,symbol,action,price,shares\n2024-01-15,IBM,BUY,10.00,1\n".encode("latin-1")
+        csv_bytes = (
+            "date,symbol,action,price,shares\n2024-01-15,IBM,BUY,10.00,1\n".encode(
+                "latin-1"
+            )
+        )
         data = {"file": (io.BytesIO(csv_bytes), "trades.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code == 200
 
     def test_png_upload_rejected_even_via_file_route(self, client):
@@ -272,5 +305,7 @@ class TestAnalyzeBacktestRoute:
         # (present in every real PNG IHDR chunk).
         png_header = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         data = {"file": (io.BytesIO(png_header), "image.csv")}
-        resp = client.post("/analyze-trades", content_type="multipart/form-data", data=data)
+        resp = client.post(
+            "/analyze-trades", content_type="multipart/form-data", data=data
+        )
         assert resp.status_code == 400

@@ -56,7 +56,9 @@ def fetch_benchmark(trades: list[dict], ticker: str) -> dict | None:
     fetch_end = end + timedelta(days=1)
 
     try:
-        data = yf.download(ticker, start=start, end=fetch_end, auto_adjust=True, progress=False)
+        data = yf.download(
+            ticker, start=start, end=fetch_end, auto_adjust=True, progress=False
+        )
         # yfinance 1.x returns MultiIndex columns (field, ticker) for all downloads
         if hasattr(data.columns, "levels"):
             data.columns = data.columns.get_level_values(0)
@@ -67,7 +69,12 @@ def fetch_benchmark(trades: list[dict], ticker: str) -> dict | None:
         return None
 
     if data.empty:
-        logger.warning("%s benchmark: no data available for %s to %s", ticker, start.date(), end.date())
+        logger.warning(
+            "%s benchmark: no data available for %s to %s",
+            ticker,
+            start.date(),
+            end.date(),
+        )
         _cache[cache_key] = None
         return None
 
@@ -76,7 +83,10 @@ def fetch_benchmark(trades: list[dict], ticker: str) -> dict | None:
     if len(data) < MIN_TRADING_DAYS:
         logger.warning(
             "%s benchmark: only %d trading day(s) of data for %s to %s — period too short",
-            ticker, len(data), start.date(), end.date(),
+            ticker,
+            len(data),
+            start.date(),
+            end.date(),
         )
         _cache[cache_key] = None
         return None
@@ -85,7 +95,9 @@ def fetch_benchmark(trades: list[dict], ticker: str) -> dict | None:
     end_price = float(data["close"].iloc[-1])
 
     if start_price == 0:
-        logger.warning("%s benchmark: start price is zero, cannot compute return", ticker)
+        logger.warning(
+            "%s benchmark: start price is zero, cannot compute return", ticker
+        )
         _cache[cache_key] = None
         return None
 
@@ -123,7 +135,9 @@ def compare_user_return_to_benchmarks(
     Returns an empty comparisons list if trades are empty or no benchmark data
     is available for any ticker.
     """
-    if not isinstance(after_cost_return_pct, (int, float)) or math.isnan(after_cost_return_pct):
+    if not isinstance(after_cost_return_pct, (int, float)) or math.isnan(
+        after_cost_return_pct
+    ):
         raise ValueError(
             f"after_cost_return_pct must be a valid number, got {after_cost_return_pct!r}"
         )
@@ -135,30 +149,44 @@ def compare_user_return_to_benchmarks(
     for ticker in tickers:
         benchmark = fetch_benchmark(trades, ticker)
         if benchmark is None:
-            comparisons.append({
-                "ticker": ticker,
-                "benchmark_return_pct": None,
-                "alpha_pct": None,
-                "available": False,
-            })
+            comparisons.append(
+                {
+                    "ticker": ticker,
+                    "benchmark_return_pct": None,
+                    "alpha_pct": None,
+                    "available": False,
+                }
+            )
             continue
 
         benchmark_return = benchmark["total_return_pct"]
         alpha = round(after_cost_return_pct - benchmark_return, 4)
-        comparisons.append({
-            "ticker": ticker,
-            "benchmark_return_pct": benchmark_return,
-            "alpha_pct": alpha,
-            "outperformed": alpha > 0,  # ties (alpha == 0) do not count as outperforming
-            "available": True,
-        })
+        comparisons.append(
+            {
+                "ticker": ticker,
+                "benchmark_return_pct": benchmark_return,
+                "alpha_pct": alpha,
+                "outperformed": alpha
+                > 0,  # ties (alpha == 0) do not count as outperforming
+                "available": True,
+            }
+        )
 
     available = [c for c in comparisons if c["available"]]
 
     result = {
         "after_cost_return_pct": round(after_cost_return_pct, 4),
         "comparisons": comparisons,
-        "best_alpha_ticker": max(available, key=lambda c: c["alpha_pct"])["ticker"] if available else None,
+        "best_alpha_ticker": (
+            max(
+                available,
+                key=lambda c: (
+                    c["alpha_pct"] if c["alpha_pct"] is not None else float("-inf")
+                ),
+            )["ticker"]
+            if available
+            else None
+        ),
         "any_benchmark_available": len(available) > 0,
     }
     result["verdict"] = generate_verdict(result)

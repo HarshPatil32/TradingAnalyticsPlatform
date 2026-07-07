@@ -24,5 +24,3 @@ Navigate to http://localhost:5173/
 
 - **Frontend:** React + Vite + Tailwind
 - **Backend:** Python + Flask
-
-

@@ -14,18 +14,26 @@ import math
 import re
 import statistics
 from datetime import datetime
-from typing import Any, Sequence
 
-from transaction_costs import calculate_commissions, calculate_slippage, calculate_bid_ask_spread, DEFAULT_COMMISSION_PER_TRADE, DEFAULT_SLIPPAGE_PCT, DEFAULT_SPREAD_PCT, MIN_CLOSED_TRADES_FOR_CONCLUSIONS, check_trade_count_sufficiency
-from statistical_tests import run_significance_tests
 from benchmark import fetch_benchmark
+from statistical_tests import run_significance_tests
+from transaction_costs import (
+    DEFAULT_COMMISSION_PER_TRADE,
+    DEFAULT_SLIPPAGE_PCT,
+    DEFAULT_SPREAD_PCT,
+    calculate_bid_ask_spread,
+    calculate_commissions,
+    calculate_slippage,
+    check_trade_count_sufficiency,
+)
 
 SPY_TICKER = "SPY"
 QQQ_TICKER = "QQQ"
 
+
 def _normalize_action(action):
     """Normalize trade action to uppercase, handling None and whitespace."""
-    return (str(action).strip().upper() if action is not None else "")
+    return str(action).strip().upper() if action is not None else ""
 
 
 logger = logging.getLogger(__name__)
@@ -37,27 +45,37 @@ logger = logging.getLogger(__name__)
 
 FREE_TIER_TRADE_LIMIT = 100
 
+
 class FreeTierLimitExceeded(ValueError):
     """Raised when the free tier trade limit is exceeded."""
+
     pass
+
 
 REQUIRED_DETAILED_COLUMNS: frozenset[str] = frozenset(
     {"date", "symbol", "action", "price", "shares"}
 )
 
 REQUIRED_SUMMARY_KEYS: frozenset[str] = frozenset(
-    {"initial_capital", "final_balance", "num_trades", "win_rate", "start_date", "end_date"}
+    {
+        "initial_capital",
+        "final_balance",
+        "num_trades",
+        "win_rate",
+        "start_date",
+        "end_date",
+    }
 )
 
 # Binary file magic bytes that should never appear in a CSV
 _BINARY_MAGIC: tuple[bytes, ...] = (
-    b"MZ",           # Windows PE/EXE
-    b"\x7fELF",      # Linux ELF
-    b"#!",           # Shell/script shebang
-    b"%PDF",         # PDF
-    b"PK\x03\x04",   # ZIP / XLSX / DOCX
-    b"\x89PNG",      # PNG image
-    b"\x1f\x8b",     # GZIP archive
+    b"MZ",  # Windows PE/EXE
+    b"\x7fELF",  # Linux ELF
+    b"#!",  # Shell/script shebang
+    b"%PDF",  # PDF
+    b"PK\x03\x04",  # ZIP / XLSX / DOCX
+    b"\x89PNG",  # PNG image
+    b"\x1f\x8b",  # GZIP archive
 )
 
 # Characters that trigger formula execution in spreadsheet tools (CSV injection)
@@ -83,6 +101,7 @@ FORMAT_DESCRIPTIONS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _is_numeric_cell(value: str) -> bool:
     """Return True if value is a plain number (int, float, or scientific notation)."""
@@ -117,9 +136,13 @@ def _parse_iso_date(value: str | None, field: str, row_num: int) -> datetime:
     try:
         parsed = datetime.strptime(value, "%Y-%m-%d")
     except ValueError:
-        raise ValueError(f"Row {row_num}: invalid {field} '{value}', expected YYYY-MM-DD")
+        raise ValueError(
+            f"Row {row_num}: invalid {field} '{value}', expected YYYY-MM-DD"
+        )
     if parsed.strftime("%Y-%m-%d") != value:
-        raise ValueError(f"Row {row_num}: invalid {field} '{value}', expected YYYY-MM-DD")
+        raise ValueError(
+            f"Row {row_num}: invalid {field} '{value}', expected YYYY-MM-DD"
+        )
     return parsed
 
 
@@ -185,7 +208,7 @@ def sanitize_csv(csv_data: str) -> str:
     # Normalise line endings to \n
     csv_data = csv_data.replace("\r\n", "\n").replace("\r", "\n")
     # Detect delimiter and convert semicolon-delimited files to comma-delimited
-    first_non_empty = next((l for l in csv_data.split("\n") if l.strip()), "")
+    first_non_empty = next((line for line in csv_data.split("\n") if line.strip()), "")
     try:
         dialect = csv.Sniffer().sniff(first_non_empty, delimiters=",;")
         logger.debug("CSV delimiter detected: %r", dialect.delimiter)
@@ -203,10 +226,19 @@ def sanitize_csv(csv_data: str) -> str:
 # ---------------------------------------------------------------------------
 
 # Headers present in a Robinhood CSV export (lowercase)
-_ROBINHOOD_HEADERS: frozenset[str] = frozenset({
-    "activity date", "process date", "settle date",
-    "instrument", "description", "trans code", "quantity", "price", "amount",
-})
+_ROBINHOOD_HEADERS: frozenset[str] = frozenset(
+    {
+        "activity date",
+        "process date",
+        "settle date",
+        "instrument",
+        "description",
+        "trans code",
+        "quantity",
+        "price",
+        "amount",
+    }
+)
 
 # Trans Code values that represent actual trades (not dividends, transfers, etc.)
 _ROBINHOOD_TRADE_CODES: frozenset[str] = frozenset({"BUY", "SELL"})
@@ -279,7 +311,9 @@ def detect_format(csv_data: str) -> str:
     except StopIteration:
         raise ValueError("CSV is empty or has no header row")
 
-    actual_cols: frozenset[str] = frozenset(col.strip().lower() for col in header_row if col.strip())
+    actual_cols: frozenset[str] = frozenset(
+        col.strip().lower() for col in header_row if col.strip()
+    )
 
     if not actual_cols:
         raise ValueError("CSV is empty or has no header row")
@@ -317,7 +351,9 @@ def parse_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
 
     missing = REQUIRED_DETAILED_COLUMNS - norm_to_original.keys()
     if missing:
-        raise ValueError(f"Your CSV is missing required columns: {sorted(missing)}. Please check your file headers.")
+        raise ValueError(
+            f"Your CSV is missing required columns: {sorted(missing)}. Please check your file headers."
+        )
 
     # Access each required column by its original (un-normalized) fieldname
     col = {norm: norm_to_original[norm] for norm in REQUIRED_DETAILED_COLUMNS}
@@ -337,17 +373,21 @@ def parse_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
         raw_row = _strip_row(raw_row)
 
         date_val = _require_field(raw_row[col["date"]], row_num, "date")
-        _parse_iso_date(date_val, "date", row_num)  # validation only; date stored as string
+        _parse_iso_date(
+            date_val, "date", row_num
+        )  # validation only; date stored as string
 
         symbol_val = _require_field(raw_row[col["symbol"]], row_num, "symbol").upper()
         # Disallow all-digit, trailing dot/hyphen, or any space
         if (
             not _SYMBOL_RE.match(symbol_val)
             or symbol_val.isdigit()
-            or symbol_val.endswith(('.', '-'))
-            or ' ' in symbol_val
+            or symbol_val.endswith((".", "-"))
+            or " " in symbol_val
         ):
-            raise ValueError(f"Row {row_num}: symbol '{symbol_val}' contains invalid characters")
+            raise ValueError(
+                f"Row {row_num}: symbol '{symbol_val}' contains invalid characters"
+            )
 
         action_val = _require_field(raw_row[col["action"]], row_num, "action").upper()
         if action_val not in {"BUY", "SELL"}:
@@ -356,13 +396,15 @@ def parse_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
         price_val = _parse_positive_float(raw_row[col["price"]], "price", row_num)
         shares_val = _parse_positive_float(raw_row[col["shares"]], "shares", row_num)
 
-        trades.append({
-            "date": date_val,
-            "symbol": symbol_val,
-            "action": action_val,
-            "price": price_val,
-            "shares": shares_val,
-        })
+        trades.append(
+            {
+                "date": date_val,
+                "symbol": symbol_val,
+                "action": action_val,
+                "price": price_val,
+                "shares": shares_val,
+            }
+        )
 
     return trades
 
@@ -389,9 +431,10 @@ def parse_summary(csv_data: str) -> dict:
     norm_to_original: dict[str, str] = {f.strip().lower(): f for f in reader.fieldnames}
     actual_cols = set(norm_to_original.keys())
     missing = REQUIRED_SUMMARY_KEYS - actual_cols
-    extra = actual_cols - REQUIRED_SUMMARY_KEYS
     if missing:
-        raise ValueError(f"Your CSV is missing required fields: {sorted(missing)}. Please check your column names.")
+        raise ValueError(
+            f"Your CSV is missing required fields: {sorted(missing)}. Please check your column names."
+        )
 
     # Map normalized required keys to original header
     col = {norm: norm_to_original[norm] for norm in REQUIRED_SUMMARY_KEYS}
@@ -426,7 +469,9 @@ def parse_summary(csv_data: str) -> dict:
         or num_trades_f <= 0
         or num_trades_f % 1 != 0
     ):
-        raise ValueError(f"Row 2: num_trades must be a positive integer, got '{num_trades_str}'")
+        raise ValueError(
+            f"Row 2: num_trades must be a positive integer, got '{num_trades_str}'"
+        )
     num_trades = int(num_trades_f)
 
     win_rate_str = data_row[col["win_rate"]]
@@ -436,7 +481,9 @@ def parse_summary(csv_data: str) -> dict:
         raise ValueError(f"Row 2: win_rate '{win_rate_str}' is not a number")
     # expects a decimal fraction, e.g. 0.65 not 65
     if math.isnan(win_rate) or math.isinf(win_rate) or win_rate < 0.0 or win_rate > 1.0:
-        raise ValueError(f"Row 2: win_rate must be between 0 and 1, got '{win_rate_str}'")
+        raise ValueError(
+            f"Row 2: win_rate must be between 0 and 1, got '{win_rate_str}'"
+        )
 
     start_date_str = data_row[col["start_date"]]
     parsed_start = _parse_iso_date(start_date_str, "start_date", 2)
@@ -480,13 +527,15 @@ def validate_trades(trades: list[dict]) -> list[dict]:
     for key, count in seen.items():
         if count > 1:
             date, symbol, action = key
-            warnings.append({
-                "type": "duplicate",
-                "level": "warning",
-                "message": (
-                    f"Duplicate trade: {action} {symbol} on {date} appears {count} times"
-                ),
-            })
+            warnings.append(
+                {
+                    "type": "duplicate",
+                    "level": "warning",
+                    "message": (
+                        f"Duplicate trade: {action} {symbol} on {date} appears {count} times"
+                    ),
+                }
+            )
 
     # Check BUY/SELL pairing per symbol using a simple FIFO stack
     open_buys: dict[str, list[dict]] = {}
@@ -498,26 +547,30 @@ def validate_trades(trades: list[dict]) -> list[dict]:
         elif action == "SELL":
             if not open_buys.get(symbol):
                 date = trade.get("date") or "unknown date"
-                warnings.append({
-                    "type": "unmatched_sell",
-                    "level": "warning",
-                    "message": f"SELL for {symbol} on {date} has no preceding BUY",
-                })
+                warnings.append(
+                    {
+                        "type": "unmatched_sell",
+                        "level": "warning",
+                        "message": f"SELL for {symbol} on {date} has no preceding BUY",
+                    }
+                )
             else:
                 open_buys[symbol].pop(0)
 
     for symbol, buys in open_buys.items():
         for buy in buys:
             date = buy.get("date") or "unknown date"
-            warnings.append({
-                "type": "unclosed_position",
-                "level": "info",
-                "message": f"Open position: {symbol} BUY on {date} (no matching SELL yet)",
-                "symbol": symbol,
-                "date": date,
-                "price": buy.get("price"),
-                "shares": buy.get("shares"),
-            })
+            warnings.append(
+                {
+                    "type": "unclosed_position",
+                    "level": "info",
+                    "message": f"Open position: {symbol} BUY on {date} (no matching SELL yet)",
+                    "symbol": symbol,
+                    "date": date,
+                    "price": buy.get("price"),
+                    "shares": buy.get("shares"),
+                }
+            )
 
     # Check for zero or negative price or share count, or missing/invalid values
     def _is_invalid_value(val):
@@ -533,17 +586,21 @@ def validate_trades(trades: list[dict]) -> list[dict]:
         shares = trade.get("shares")
 
         if _is_invalid_value(price):
-            warnings.append({
-                "type": "invalid_price",
-                "level": "warning",
-                "message": f"Row {idx+1}: Trade {symbol} on {date} has invalid price: {price}",
-            })
+            warnings.append(
+                {
+                    "type": "invalid_price",
+                    "level": "warning",
+                    "message": f"Row {idx+1}: Trade {symbol} on {date} has invalid price: {price}",
+                }
+            )
         if _is_invalid_value(shares):
-            warnings.append({
-                "type": "invalid_shares",
-                "level": "warning",
-                "message": f"Row {idx+1}: Trade {symbol} on {date} has invalid share count: {shares}",
-            })
+            warnings.append(
+                {
+                    "type": "invalid_shares",
+                    "level": "warning",
+                    "message": f"Row {idx+1}: Trade {symbol} on {date} has invalid share count: {shares}",
+                }
+            )
 
     return warnings
 
@@ -561,6 +618,8 @@ def calculate_pnl(trades: list[dict]) -> dict:
 
     for trade in trades:
         symbol = trade.get("symbol")
+        if not symbol:
+            continue
         action = _normalize_action(trade.get("action"))
         if action == "BUY":
             open_buys.setdefault(symbol, []).append(trade)
@@ -570,16 +629,18 @@ def calculate_pnl(trades: list[dict]) -> dict:
             buy = open_buys[symbol].pop(0)
             pnl = (trade.get("price", 0) - buy.get("price", 0)) * trade.get("shares", 0)
             cumulative_pnl += pnl
-            trade_pnl.append({
-                "buy_date": buy.get("date"),
-                "sell_date": trade.get("date"),
-                "symbol": symbol,
-                "shares": trade.get("shares"),
-                "buy_price": buy.get("price"),
-                "sell_price": trade.get("price"),
-                "pnl": round(pnl, 4),
-                "cumulative_pnl": round(cumulative_pnl, 4),
-            })
+            trade_pnl.append(
+                {
+                    "buy_date": buy.get("date"),
+                    "sell_date": trade.get("date"),
+                    "symbol": symbol,
+                    "shares": trade.get("shares"),
+                    "buy_price": buy.get("price"),
+                    "sell_price": trade.get("price"),
+                    "pnl": round(pnl, 4),
+                    "cumulative_pnl": round(cumulative_pnl, 4),
+                }
+            )
 
     # Equity curve: cumulative P&L at each sell event in chronological order.
     # trade_pnl follows CSV row order; sort by close date so the chart reads left-to-right.
@@ -587,19 +648,17 @@ def calculate_pnl(trades: list[dict]) -> dict:
     equity_curve = []
     for t in sorted(trade_pnl, key=lambda row: row["sell_date"]):
         running_pnl += t["pnl"]
-        equity_curve.append({
-            "date": t["sell_date"],
-            "cumulative_pnl": round(running_pnl, 4),
-        })
+        equity_curve.append(
+            {
+                "date": t["sell_date"],
+                "cumulative_pnl": round(running_pnl, 4),
+            }
+        )
 
     # Total return as a percentage of total capital deployed (sum of all buy costs)
-    total_buy_cost = sum(
-        t["buy_price"] * t["shares"] for t in trade_pnl
-    )
+    total_buy_cost = sum(t["buy_price"] * t["shares"] for t in trade_pnl)
     total_return_pct = (
-        round((cumulative_pnl / total_buy_cost) * 100, 4)
-        if total_buy_cost > 0
-        else 0.0
+        round((cumulative_pnl / total_buy_cost) * 100, 4) if total_buy_cost > 0 else 0.0
     )
 
     # Helper to safely compute holding period in days
@@ -609,7 +668,9 @@ def calculate_pnl(trades: list[dict]) -> dict:
             sell = t["sell_date"]
             if not (buy and sell):
                 return None
-            days = (datetime.strptime(sell, "%Y-%m-%d") - datetime.strptime(buy, "%Y-%m-%d")).days
+            days = (
+                datetime.strptime(sell, "%Y-%m-%d") - datetime.strptime(buy, "%Y-%m-%d")
+            ).days
             return days if days >= 0 else None
         except Exception:
             return None
@@ -617,17 +678,27 @@ def calculate_pnl(trades: list[dict]) -> dict:
     # Only count trades with pnl > 0 (exclude breakeven and losses)
     # This is intentional: see test coverage and docstring
     winner_days = [
-        d for t in trade_pnl if t["pnl"] > 0
-        for d in [_holding_days(t)] if d is not None
+        d
+        for t in trade_pnl
+        if t["pnl"] > 0
+        for d in [_holding_days(t)]
+        if d is not None
     ]
-    avg_holding_days_winners = round(float(statistics.mean(winner_days)), 2) if winner_days else None
+    avg_holding_days_winners = (
+        round(float(statistics.mean(winner_days)), 2) if winner_days else None
+    )
 
     # Mean days held for trades that closed at a loss (pnl < 0, excluding breakeven)
     loser_days = [
-        d for t in trade_pnl if t["pnl"] < 0
-        for d in [_holding_days(t)] if d is not None
+        d
+        for t in trade_pnl
+        if t["pnl"] < 0
+        for d in [_holding_days(t)]
+        if d is not None
     ]
-    avg_holding_days_losers = round(float(statistics.mean(loser_days)), 2) if loser_days else None
+    avg_holding_days_losers = (
+        round(float(statistics.mean(loser_days)), 2) if loser_days else None
+    )
 
     return {
         "trade_pnl": trade_pnl,
@@ -639,11 +710,11 @@ def calculate_pnl(trades: list[dict]) -> dict:
     }
 
 
-
 # Minimum winners and losers required before flagging the disposition effect
 MIN_TRADES_FOR_DISPOSITION_CHECK = 5
 # Losers must be held at least 50% longer than winners to trigger the warning
 DISPOSITION_EFFECT_THRESHOLD = 1.5
+
 
 def check_disposition_effect(pnl_data: dict) -> dict | None:
     """Return a warning dict if losing trades are held significantly longer than winners.
@@ -661,7 +732,10 @@ def check_disposition_effect(pnl_data: dict) -> dict | None:
     num_winners = sum(1 for t in trade_pnl if t.get("pnl", 0) > 0)
     num_losers = sum(1 for t in trade_pnl if t.get("pnl", 0) < 0)
 
-    if num_winners < MIN_TRADES_FOR_DISPOSITION_CHECK or num_losers < MIN_TRADES_FOR_DISPOSITION_CHECK:
+    if (
+        num_winners < MIN_TRADES_FOR_DISPOSITION_CHECK
+        or num_losers < MIN_TRADES_FOR_DISPOSITION_CHECK
+    ):
         return None
 
     if avg_loser_days / avg_winner_days < DISPOSITION_EFFECT_THRESHOLD:
@@ -678,7 +752,6 @@ def check_disposition_effect(pnl_data: dict) -> dict | None:
             "Consider using stop-losses to cut losing trades earlier."
         ),
     }
-
 
 
 # Costs must eat this fraction of gross profit before the overtrading flag fires
@@ -710,7 +783,11 @@ def check_overtrading(
         except Exception:
             return 0.0
 
-    if not isinstance(commissions, dict) or not isinstance(slippage, dict) or not isinstance(bid_ask_spread, dict):
+    if (
+        not isinstance(commissions, dict)
+        or not isinstance(slippage, dict)
+        or not isinstance(bid_ask_spread, dict)
+    ):
         return None
 
     if num_closed < MIN_TRADES_FOR_FREQUENCY_SIGNAL:
@@ -792,7 +869,10 @@ def check_concentration_risk(trades: list[dict]) -> dict | None:
     for trade in trades:
         symbol = str(trade.get("symbol") or "").strip().upper()
         if not symbol:
-            logger.warning("check_concentration_risk: trade skipped due to missing symbol: %r", trade)
+            logger.warning(
+                "check_concentration_risk: trade skipped due to missing symbol: %r",
+                trade,
+            )
             continue
         symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
 
@@ -823,7 +903,12 @@ def check_concentration_risk(trades: list[dict]) -> dict | None:
     }
 
 
-def analyze_uploaded_trades(csv_data: str, commission_per_trade: float = DEFAULT_COMMISSION_PER_TRADE, slippage_pct: float = DEFAULT_SLIPPAGE_PCT, spread_pct: float = DEFAULT_SPREAD_PCT) -> dict:
+def analyze_uploaded_trades(
+    csv_data: str,
+    commission_per_trade: float = DEFAULT_COMMISSION_PER_TRADE,
+    slippage_pct: float = DEFAULT_SLIPPAGE_PCT,
+    spread_pct: float = DEFAULT_SPREAD_PCT,
+) -> dict:
     """Main entry point: sanitize, detect format, parse, validate, and return analysis results."""
     try:
         clean = sanitize_csv(csv_data)
@@ -854,7 +939,9 @@ def analyze_uploaded_trades(csv_data: str, commission_per_trade: float = DEFAULT
                 "pnl": {},
                 "significance": None,
             }
-        sufficiency_warning = check_trade_count_sufficiency(summary.get("num_trades", 0))
+        sufficiency_warning = check_trade_count_sufficiency(
+            summary.get("num_trades", 0)
+        )
         if sufficiency_warning:
             warnings.append(sufficiency_warning)
         return {
@@ -864,20 +951,30 @@ def analyze_uploaded_trades(csv_data: str, commission_per_trade: float = DEFAULT
             "warnings": warnings,
         }
 
-    trades = parse_detailed(clean, is_free_tier=False) or []  # TODO: re-enable for production
+    trades = (
+        parse_detailed(clean, is_free_tier=False) or []
+    )  # TODO: re-enable for production
     all_issues = validate_trades(trades) or []
     WARNING_LEVELS = {"warning", "error"}
     INFO_LEVELS = {"info"}
-    warnings.extend(i for i in all_issues if i.get("level", "warning") in WARNING_LEVELS)
+    warnings.extend(
+        i for i in all_issues if i.get("level", "warning") in WARNING_LEVELS
+    )
     notices = [i for i in all_issues if i.get("level") in INFO_LEVELS]
     pnl = calculate_pnl(trades) if trades else {}
     num_closed = len(pnl.get("trade_pnl", []))
     sufficiency_warning = check_trade_count_sufficiency(num_closed)
     if sufficiency_warning:
         warnings.append(sufficiency_warning)
-    commissions = calculate_commissions(trades, commission_per_trade=commission_per_trade) if trades else {}
+    commissions = (
+        calculate_commissions(trades, commission_per_trade=commission_per_trade)
+        if trades
+        else {}
+    )
     slippage = calculate_slippage(trades, slippage_pct=slippage_pct) if trades else {}
-    bid_ask_spread = calculate_bid_ask_spread(trades, spread_pct=spread_pct) if trades else {}
+    bid_ask_spread = (
+        calculate_bid_ask_spread(trades, spread_pct=spread_pct) if trades else {}
+    )
     pnl_values = [t["pnl"] for t in pnl.get("trade_pnl", [])]
     significance = run_significance_tests(pnl_values) if pnl_values else None
     disposition_warning = check_disposition_effect(pnl)

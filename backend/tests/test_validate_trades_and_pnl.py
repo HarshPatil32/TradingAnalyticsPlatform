@@ -1,16 +1,22 @@
 """Tests for validate_trades() and calculate_pnl() in csv_analyzer."""
-import pytest
 
-from csv_analyzer import validate_trades, calculate_pnl, check_concentration_risk
+from csv_analyzer import calculate_pnl, check_concentration_risk, validate_trades
 
 
 def _trade(date, symbol, action, price, shares):
-    return {"date": date, "symbol": symbol, "action": action, "price": price, "shares": shares}
+    return {
+        "date": date,
+        "symbol": symbol,
+        "action": action,
+        "price": price,
+        "shares": shares,
+    }
 
 
 # ---------------------------------------------------------------------------
 # validate_trades
 # ---------------------------------------------------------------------------
+
 
 class TestValidateTrades:
     def test_duplicate_case_insensitive(self):
@@ -32,21 +38,45 @@ class TestValidateTrades:
         trade1 = _trade("2024-01-01", "AAPL", "BUY", 100.0, 10)
         trade2 = _trade("2024-01-01", "AAPL", "BUY", 105.0, 5)
         trade3 = _trade("2024-01-01", "AAPL", "BUY", 110.0, 2)
-        warnings = [w for w in validate_trades([trade1, trade2, trade3]) if w["type"] == "duplicate"]
+        warnings = [
+            w
+            for w in validate_trades([trade1, trade2, trade3])
+            if w["type"] == "duplicate"
+        ]
         assert len(warnings) == 1
         assert "appears 3 times" in warnings[0]["message"]
 
     def test_sell_lowercase_action_flagged(self):
         trades = [
-            {"date": "2024-01-02", "symbol": "AAPL", "action": "sell", "price": 110.0, "shares": 10},
+            {
+                "date": "2024-01-02",
+                "symbol": "AAPL",
+                "action": "sell",
+                "price": 110.0,
+                "shares": 10,
+            },
         ]
         warnings = validate_trades(trades)
-        assert any(w["type"] == "unmatched_sell" and w["level"] == "warning" for w in warnings)
+        assert any(
+            w["type"] == "unmatched_sell" and w["level"] == "warning" for w in warnings
+        )
 
     def test_symbol_with_whitespace_still_matched(self):
         trades = [
-            {"date": "2024-01-01", "symbol": "AAPL ", "action": "BUY", "price": 100.0, "shares": 10},
-            {"date": "2024-01-02", "symbol": "AAPL", "action": "SELL", "price": 110.0, "shares": 10},
+            {
+                "date": "2024-01-01",
+                "symbol": "AAPL ",
+                "action": "BUY",
+                "price": 100.0,
+                "shares": 10,
+            },
+            {
+                "date": "2024-01-02",
+                "symbol": "AAPL",
+                "action": "SELL",
+                "price": 110.0,
+                "shares": 10,
+            },
         ]
         warnings = validate_trades(trades)
         assert not any(w["type"] == "unmatched_sell" for w in warnings)
@@ -56,7 +86,10 @@ class TestValidateTrades:
             {"symbol": "AAPL", "action": "SELL", "price": 110.0, "shares": 10},
         ]
         warnings = validate_trades(trades)
-        assert any(w["type"] == "unmatched_sell" and "unknown date" in w["message"] for w in warnings)
+        assert any(
+            w["type"] == "unmatched_sell" and "unknown date" in w["message"]
+            for w in warnings
+        )
 
     def test_missing_level_key_defaults_to_warning(self):
         # Simulate a trade warning without a level key
@@ -66,9 +99,12 @@ class TestValidateTrades:
         ]
         # Patch analyze_uploaded_trades to use these items
         from csv_analyzer import analyze_uploaded_trades
+
         def fake_validate_trades(_):
             return items
+
         import csv_analyzer
+
         orig = csv_analyzer.validate_trades
         csv_analyzer.validate_trades = fake_validate_trades
         try:
@@ -83,27 +119,37 @@ class TestValidateTrades:
     def test_zero_price_flagged(self):
         trades = [_trade("2024-01-01", "AAPL", "BUY", 0, 10)]
         warnings = validate_trades(trades)
-        assert any(w["type"] == "invalid_price" and w["level"] == "warning" for w in warnings)
+        assert any(
+            w["type"] == "invalid_price" and w["level"] == "warning" for w in warnings
+        )
 
     def test_negative_price_flagged(self):
         trades = [_trade("2024-01-01", "AAPL", "BUY", -5.0, 10)]
         warnings = validate_trades(trades)
-        assert any(w["type"] == "invalid_price" and w["level"] == "warning" for w in warnings)
+        assert any(
+            w["type"] == "invalid_price" and w["level"] == "warning" for w in warnings
+        )
 
     def test_zero_shares_flagged(self):
         trades = [_trade("2024-01-01", "AAPL", "BUY", 100.0, 0)]
         warnings = validate_trades(trades)
-        assert any(w["type"] == "invalid_shares" and w["level"] == "warning" for w in warnings)
+        assert any(
+            w["type"] == "invalid_shares" and w["level"] == "warning" for w in warnings
+        )
 
     def test_negative_shares_flagged(self):
         trades = [_trade("2024-01-01", "AAPL", "BUY", 100.0, -5)]
         warnings = validate_trades(trades)
-        assert any(w["type"] == "invalid_shares" and w["level"] == "warning" for w in warnings)
+        assert any(
+            w["type"] == "invalid_shares" and w["level"] == "warning" for w in warnings
+        )
 
     def test_valid_trade_no_invalid_value_warnings(self):
         trades = [_trade("2024-01-01", "AAPL", "BUY", 150.0, 10)]
         warnings = validate_trades(trades)
-        assert not any(w["type"] in {"invalid_price", "invalid_shares"} for w in warnings)
+        assert not any(
+            w["type"] in {"invalid_price", "invalid_shares"} for w in warnings
+        )
 
     def test_both_price_and_shares_invalid(self):
         trades = [_trade("2024-01-01", "MSFT", "BUY", 0, 0)]
@@ -120,6 +166,7 @@ class TestValidateTrades:
 
     def test_analyze_uploaded_trades_returns_notices_key(self):
         from csv_analyzer import analyze_uploaded_trades
+
         csv = "date,symbol,action,price,shares\n2024-01-01,AAPL,BUY,100,10\n2024-02-01,AAPL,SELL,110,10\n"
         result = analyze_uploaded_trades(csv)
         assert "notices" in result
@@ -127,9 +174,11 @@ class TestValidateTrades:
 
     def test_no_open_positions_empty_notices(self):
         from csv_analyzer import analyze_uploaded_trades
+
         csv = "date,symbol,action,price,shares\n2024-01-01,AAPL,BUY,100,10\n2024-02-01,AAPL,SELL,110,10\n"
         result = analyze_uploaded_trades(csv)
         assert result["notices"] == []
+
     def test_no_warnings_for_clean_trades(self):
         trades = [
             _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
@@ -208,6 +257,7 @@ class TestValidateTrades:
 
     def test_analyze_uploaded_trades_unclosed_position_has_structured_fields(self):
         from csv_analyzer import analyze_uploaded_trades
+
         csv = "date,symbol,action,price,shares\n2024-01-15,AAPL,BUY,150,10\n"
         result = analyze_uploaded_trades(csv)
         assert len(result["notices"]) == 1
@@ -235,11 +285,13 @@ def test_mixed_case_sell_actions_no_warnings():
     ]
     assert validate_trades(trades) == []
 
+
 def test_mixed_case_sell_duplicate_detected():
     trade = _trade("2024-01-01", "AAPL", "SELL", 100.0, 10)
     same_lowercase = _trade("2024-01-01", "AAPL", "sell", 100.0, 10)
     warnings = validate_trades([trade, same_lowercase])
     assert any(w["type"] == "duplicate" for w in warnings)
+
 
 def test_missing_action_does_not_crash():
     trades = [
@@ -249,13 +301,21 @@ def test_missing_action_does_not_crash():
     warnings = validate_trades(trades)
     assert isinstance(warnings, list)
 
+
 def test_null_action_does_not_crash():
     trades = [
-        {"date": "2024-01-01", "symbol": "AAPL", "action": None, "price": 100.0, "shares": 10},
+        {
+            "date": "2024-01-01",
+            "symbol": "AAPL",
+            "action": None,
+            "price": 100.0,
+            "shares": 10,
+        },
         _trade("2024-02-01", "AAPL", "SELL", 110.0, 10),
     ]
     warnings = validate_trades(trades)
     assert isinstance(warnings, list)
+
 
 def test_mixed_case_sell_actions_compute_correctly():
     trades = [
@@ -266,6 +326,7 @@ def test_mixed_case_sell_actions_compute_correctly():
     assert result["total_pnl"] == 100.0
     assert len(result["trade_pnl"]) == 1
 
+
 def test_missing_action_skipped_in_pnl():
     trades = [
         {"date": "2024-01-01", "symbol": "AAPL", "price": 100.0, "shares": 10},
@@ -275,14 +336,22 @@ def test_missing_action_skipped_in_pnl():
     assert result["total_pnl"] == 0.0
     assert result["trade_pnl"] == []
 
+
 def test_null_action_skipped_in_pnl():
     trades = [
-        {"date": "2024-01-01", "symbol": "AAPL", "action": None, "price": 100.0, "shares": 10},
+        {
+            "date": "2024-01-01",
+            "symbol": "AAPL",
+            "action": None,
+            "price": 100.0,
+            "shares": 10,
+        },
         _trade("2024-02-01", "AAPL", "SELL", 110.0, 10),
     ]
     result = calculate_pnl(trades)
     assert result["total_pnl"] == 0.0
     assert result["trade_pnl"] == []
+
 
 def test_same_date_symbol_different_action_not_duplicate():
     # BUY and SELL on same date+symbol are not duplicates
@@ -321,6 +390,7 @@ def test_more_sells_than_buys_extra_sell_flagged():
 # ---------------------------------------------------------------------------
 # calculate_pnl
 # ---------------------------------------------------------------------------
+
 
 class TestCalculatePnl:
     def test_single_profitable_trade(self):
@@ -394,7 +464,7 @@ class TestCalculatePnl:
             _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
             _trade("2024-02-01", "AAPL", "SELL", 110.0, 10),  # +100
             _trade("2024-03-01", "MSFT", "BUY", 200.0, 5),
-            _trade("2024-04-01", "MSFT", "SELL", 220.0, 5),   # +100
+            _trade("2024-04-01", "MSFT", "SELL", 220.0, 5),  # +100
         ]
         result = calculate_pnl(trades)
         assert result["total_pnl"] == 200.0
@@ -405,7 +475,7 @@ class TestCalculatePnl:
         trades = [
             _trade("2024-01-01", "AAPL", "BUY", 100.0, 10),
             _trade("2024-02-01", "MSFT", "BUY", 200.0, 5),
-            _trade("2024-04-01", "MSFT", "SELL", 220.0, 5),   # +100, later close
+            _trade("2024-04-01", "MSFT", "SELL", 220.0, 5),  # +100, later close
             _trade("2024-03-01", "AAPL", "SELL", 110.0, 10),  # +100, earlier close
         ]
         result = calculate_pnl(trades)
@@ -470,7 +540,13 @@ class TestCalculatePnl:
 
     def test_null_action_skipped_in_pnl(self):
         trades = [
-            {"date": "2024-01-01", "symbol": "AAPL", "action": None, "price": 100.0, "shares": 10},
+            {
+                "date": "2024-01-01",
+                "symbol": "AAPL",
+                "action": None,
+                "price": 100.0,
+                "shares": 10,
+            },
             _trade("2024-02-01", "AAPL", "SELL", 110.0, 10),
         ]
         result = calculate_pnl(trades)
@@ -550,8 +626,20 @@ class TestCalculatePnl:
     def test_avg_holding_days_losers_missing_dates(self):
         # Should return None if dates are missing
         trades = [
-            {"date": None, "symbol": "AAPL", "action": "BUY", "price": 110.0, "shares": 10},
-            {"date": None, "symbol": "AAPL", "action": "SELL", "price": 100.0, "shares": 10},
+            {
+                "date": None,
+                "symbol": "AAPL",
+                "action": "BUY",
+                "price": 110.0,
+                "shares": 10,
+            },
+            {
+                "date": None,
+                "symbol": "AAPL",
+                "action": "SELL",
+                "price": 100.0,
+                "shares": 10,
+            },
         ]
         result = calculate_pnl(trades)
         assert result["avg_holding_days_losers"] is None
@@ -560,6 +648,7 @@ class TestCalculatePnl:
 # ---------------------------------------------------------------------------
 # check_concentration_risk
 # ---------------------------------------------------------------------------
+
 
 class TestCheckConcentrationRisk:
     def test_all_trades_one_symbol_warns(self):
@@ -620,7 +709,15 @@ class TestCheckConcentrationRisk:
         trades = [_trade("2024-01-01", "AAPL", "BUY", 100.0, 10)] * 3
         result = check_concentration_risk(trades)
         assert result is not None
-        for key in ("type", "level", "message", "symbol", "trade_count", "total_trades", "concentration_pct"):
+        for key in (
+            "type",
+            "level",
+            "message",
+            "symbol",
+            "trade_count",
+            "total_trades",
+            "concentration_pct",
+        ):
             assert key in result
 
     def test_trade_count_and_total_are_correct(self):
@@ -636,10 +733,34 @@ class TestCheckConcentrationRisk:
 
     def test_symbol_normalized_to_uppercase(self):
         trades = [
-            {"date": "2024-01-01", "symbol": "aapl", "action": "BUY", "price": 100.0, "shares": 10},
-            {"date": "2024-01-02", "symbol": "aapl", "action": "SELL", "price": 110.0, "shares": 10},
-            {"date": "2024-01-03", "symbol": "aapl", "action": "BUY", "price": 105.0, "shares": 10},
-            {"date": "2024-01-04", "symbol": "MSFT", "action": "BUY", "price": 200.0, "shares": 5},
+            {
+                "date": "2024-01-01",
+                "symbol": "aapl",
+                "action": "BUY",
+                "price": 100.0,
+                "shares": 10,
+            },
+            {
+                "date": "2024-01-02",
+                "symbol": "aapl",
+                "action": "SELL",
+                "price": 110.0,
+                "shares": 10,
+            },
+            {
+                "date": "2024-01-03",
+                "symbol": "aapl",
+                "action": "BUY",
+                "price": 105.0,
+                "shares": 10,
+            },
+            {
+                "date": "2024-01-04",
+                "symbol": "MSFT",
+                "action": "BUY",
+                "price": 200.0,
+                "shares": 5,
+            },
         ]
         result = check_concentration_risk(trades)
         assert result is not None
@@ -648,8 +769,20 @@ class TestCheckConcentrationRisk:
     def test_trades_with_missing_symbol_are_skipped(self):
         # Trades with missing/empty symbol are skipped; only valid symbols are counted
         trades = [
-            {"date": "2024-01-01", "symbol": None, "action": "BUY", "price": 100.0, "shares": 10},
-            {"date": "2024-01-02", "symbol": "", "action": "BUY", "price": 100.0, "shares": 10},
+            {
+                "date": "2024-01-01",
+                "symbol": None,
+                "action": "BUY",
+                "price": 100.0,
+                "shares": 10,
+            },
+            {
+                "date": "2024-01-02",
+                "symbol": "",
+                "action": "BUY",
+                "price": 100.0,
+                "shares": 10,
+            },
             _trade("2024-01-03", "AAPL", "BUY", 100.0, 10),
             _trade("2024-01-04", "AAPL", "SELL", 110.0, 10),
             _trade("2024-01-05", "MSFT", "BUY", 200.0, 5),
@@ -663,9 +796,20 @@ class TestCheckConcentrationRisk:
 
     def test_all_trades_missing_symbol_returns_none(self):
         trades = [
-            {"date": "2024-01-01", "symbol": None, "action": "BUY", "price": 100.0, "shares": 10},
-            {"date": "2024-01-02", "symbol": "", "action": "BUY", "price": 100.0, "shares": 10},
+            {
+                "date": "2024-01-01",
+                "symbol": None,
+                "action": "BUY",
+                "price": 100.0,
+                "shares": 10,
+            },
+            {
+                "date": "2024-01-02",
+                "symbol": "",
+                "action": "BUY",
+                "price": 100.0,
+                "shares": 10,
+            },
         ]
         result = check_concentration_risk(trades)
         assert result is None
-

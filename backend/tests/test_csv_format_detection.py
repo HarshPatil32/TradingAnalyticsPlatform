@@ -1,8 +1,8 @@
 """Tests for detect_format() in csv_analyzer."""
+
 import pytest
 
 from csv_analyzer import detect_format, sanitize_csv
-
 
 DETAILED_HEADER = "date,symbol,action,price,shares"
 SUMMARY_HEADER = "initial_capital,final_balance,num_trades,win_rate,start_date,end_date"
@@ -18,11 +18,11 @@ class TestDetectFormat:
         assert detect_format(csv_data) == "summary"
 
     def test_detailed_with_extra_columns(self):
-        csv_data = f"date,symbol,action,price,shares,notes,broker\n2024-01-15,AAPL,BUY,185.50,10,entry,TD\n"
+        csv_data = "date,symbol,action,price,shares,notes,broker\n2024-01-15,AAPL,BUY,185.50,10,entry,TD\n"
         assert detect_format(csv_data) == "detailed"
 
     def test_summary_with_extra_columns(self):
-        csv_data = f"initial_capital,final_balance,num_trades,win_rate,start_date,end_date,strategy\n10000,12000,42,0.6,2024-01-01,2024-12-31,MACD\n"
+        csv_data = "initial_capital,final_balance,num_trades,win_rate,start_date,end_date,strategy\n10000,12000,42,0.6,2024-01-01,2024-12-31,MACD\n"
         assert detect_format(csv_data) == "summary"
 
     def test_mixed_case_headers_detailed(self):
@@ -34,7 +34,9 @@ class TestDetectFormat:
         assert detect_format(csv_data) == "summary"
 
     def test_whitespace_padded_headers(self):
-        csv_data = " date , symbol , action , price , shares \n2024-01-15,AAPL,BUY,185.50,10\n"
+        csv_data = (
+            " date , symbol , action , price , shares \n2024-01-15,AAPL,BUY,185.50,10\n"
+        )
         assert detect_format(csv_data) == "detailed"
 
     def test_unknown_columns_raises(self):
@@ -79,5 +81,7 @@ class TestDetectFormat:
     def test_detailed_takes_priority_over_summary_when_both_match(self):
         # A file with all columns of both formats should resolve to 'detailed'
         combined = f"{DETAILED_HEADER},{SUMMARY_HEADER}\n"
-        combined += "2024-01-15,AAPL,BUY,185.50,10,10000,12000,42,0.6,2024-01-01,2024-12-31\n"
+        combined += (
+            "2024-01-15,AAPL,BUY,185.50,10,10000,12000,42,0.6,2024-01-01,2024-12-31\n"
+        )
         assert detect_format(combined) == "detailed"

@@ -35,7 +35,7 @@ if pip install TA-Lib-binary==0.4.28; then
     echo "✅ TA-Lib-binary installed successfully"
 elif pip install TA-Lib-binary; then
     echo "✅ TA-Lib-binary (latest) installed successfully"
-# Method 2: Try from conda-forge wheel repository  
+# Method 2: Try from conda-forge wheel repository
 elif pip install --index-url https://pypi.anaconda.org/conda-forge/simple/ TA-Lib; then
     echo "✅ TA-Lib from conda-forge installed successfully"
 # Method 3: Try from alternative wheel source

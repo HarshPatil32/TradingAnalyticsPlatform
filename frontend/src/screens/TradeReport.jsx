@@ -49,7 +49,7 @@ export default function TradeReport({ result, onBack, isPro = false, onUpgrade, 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Your Trade Analysis</h1>
           <p className="text-zinc-400">
-            Here's the honest breakdown of your trading performance
+            Here&apos;s the honest breakdown of your trading performance
           </p>
         </div>
 
