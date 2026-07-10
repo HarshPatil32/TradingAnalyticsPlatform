@@ -60,3 +60,27 @@ At startup, `app.py` validates vars listed in `_ENV_VAR_MANIFEST`. Optional vars
 Supabase vars are optional until auth/DB integration is wired up; the app boots without them.
 
 Two Supabase projects are used: **dev** for local `backend/.env`, and **prod** for the Render and Vercel dashboards (not stored in this repo). Never commit real credentials — only the `.env.example` placeholders in git.
+
+## Supabase CLI
+
+The repo includes `supabase/config.toml` for local development and future migrations. Install the CLI once per machine:
+
+```bash
+brew install supabase/tap/supabase   # macOS; see https://supabase.com/docs/guides/cli
+```
+
+Then link to the **dev** project (one-time, interactive — requires your Supabase account):
+
+```bash
+supabase login
+supabase link --project-ref <dev-project-ref>
+```
+
+`<dev-project-ref>` is the subdomain of your dev `SUPABASE_URL` (e.g. `https://xxxxx.supabase.co` → `xxxxx`). Do not link prod locally unless explicitly needed for a deployment workflow.
+
+Local Postgres/Studio via Docker (run `supabase link` first):
+
+```bash
+supabase start   # from repo root
+supabase stop
+```
