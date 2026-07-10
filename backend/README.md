@@ -58,3 +58,5 @@ At startup, `app.py` validates vars listed in `_ENV_VAR_MANIFEST`. Optional vars
 | `SUPABASE_JWT_SECRET` | No | — | JWT secret for verifying Supabase-issued tokens on protected routes. Dashboard: Project Settings → API → JWT Settings → JWT Secret. |
 
 Supabase vars are optional until auth/DB integration is wired up; the app boots without them.
+
+Two Supabase projects are used: **dev** for local `backend/.env`, and **prod** for the Render and Vercel dashboards (not stored in this repo). Never commit real credentials — only the `.env.example` placeholders in git.
