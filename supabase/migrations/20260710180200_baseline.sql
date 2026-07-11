@@ -3,4 +3,4 @@
 
 -- Baseline migration for Trade Analyzer V2.
 -- Establishes supabase/migrations/ and the migration history table.
--- No schema objects yet: profiles/analyses/usage_counters land in
+-- No schema objects yet: profiles/analyses/usage_counters land in later migrations.
