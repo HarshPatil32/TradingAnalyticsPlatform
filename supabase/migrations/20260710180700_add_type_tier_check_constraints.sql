@@ -4,6 +4,6 @@
 alter table public.analyses
   add constraint analyses_type_check check (type in ('stock', 'options'));
 
--- 'pro' is the assumed tier value for paid users; confirm before EPIC 17 lands.
+-- 'pro' is the assumed tier value for paid users
 alter table public.profiles
   add constraint profiles_tier_check check (tier in ('free', 'pro'));
