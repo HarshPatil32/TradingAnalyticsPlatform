@@ -42,3 +42,6 @@ example1.csv
 
 V2_SCRUM_BOARD.md
 V2_DEV_NOTES.md
+
+# Supabase CLI local state (never commit)
+supabase/.temp/
