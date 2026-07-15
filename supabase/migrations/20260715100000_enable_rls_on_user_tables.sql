@@ -13,6 +13,13 @@ create policy profiles_select_own
   to authenticated
   using (id = auth.uid());
 
+create policy profiles_update_own
+  on public.profiles
+  for update
+  to authenticated
+  using (id = auth.uid())
+  with check (id = auth.uid());
+
 create policy analyses_select_own
   on public.analyses
   for select
@@ -32,5 +39,7 @@ create policy usage_counters_select_own
   using (user_id = auth.uid());
 
 grant select on public.profiles to authenticated;
+-- Only updated_at is grantable: tier is billing-controlled and id/created_at are immutable.
+grant update (updated_at) on public.profiles to authenticated;
 grant select, insert on public.analyses to authenticated;
 grant select on public.usage_counters to authenticated;
