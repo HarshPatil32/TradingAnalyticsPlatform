@@ -48,6 +48,18 @@ This applies only migrations not yet recorded on the linked project. It does **n
 
 `seed.sql` inserts `auth.users` rows with a shared known password (`devpassword123`). Never run it against a hosted project.
 
+## Running database tests (RLS)
+
+Requires Docker and a running local stack (`supabase start`).
+
+```bash
+supabase test db
+```
+
+This runs pgTAP tests in `supabase/tests/database/` against the local database. pgTAP ships with the local Postgres image; no extra install is needed. Each test file creates its own fixture users and rolls back in a transaction, so tests do not depend on `seed.sql`.
+
+Run `supabase test db` with no flags (local only). Do not use `--linked` or `--db-url` against the hosted dev project, and never against prod.
+
 ## Safety notes
 
 - Never run `supabase db reset` against a hosted project. It is destructive and local-only.
