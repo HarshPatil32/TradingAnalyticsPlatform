@@ -11,6 +11,7 @@ from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 
+import supabase_client
 from csv_analyzer import FreeTierLimitExceeded, analyze_uploaded_trades
 
 # Load env vars early so they are available at module scope (picked up by gunicorn too)
@@ -95,6 +96,11 @@ else:
         "missing_optional": [],
         "all_present": True,
     }
+
+if not os.getenv("TESTING"):
+    SUPABASE_CONNECTION_STATUS = supabase_client.check_connection()
+else:
+    SUPABASE_CONNECTION_STATUS = {"configured": False, "connected": False}
 
 
 # Resolve allowed CORS origins. "*" keeps local dev open; in production set
@@ -291,6 +297,10 @@ def health_check():
             "missing_required": (
                 ENV_STARTUP_STATUS["missing_required"] if app.debug else []
             ),
+        },
+        "supabase_status": {
+            "configured": SUPABASE_CONNECTION_STATUS["configured"],
+            "connected": SUPABASE_CONNECTION_STATUS["connected"],
         },
     }
     return jsonify(resp), 200

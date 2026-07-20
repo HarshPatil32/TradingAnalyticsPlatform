@@ -271,3 +271,26 @@ class TestHealthCheckEnvStatus:
         resp = health_check_client.get("/")
         data = resp.get_json()
         assert isinstance(data["env_status"]["missing_required"], list)
+
+
+class TestHealthCheckSupabaseStatus:
+    def test_supabase_status_present_in_response(self, health_check_client):
+        resp = health_check_client.get("/")
+        data = resp.get_json()
+        assert "supabase_status" in data
+
+    def test_supabase_status_has_configured_field(self, health_check_client):
+        resp = health_check_client.get("/")
+        data = resp.get_json()
+        assert "configured" in data["supabase_status"]
+
+    def test_supabase_status_has_connected_field(self, health_check_client):
+        resp = health_check_client.get("/")
+        data = resp.get_json()
+        assert "connected" in data["supabase_status"]
+
+    def test_supabase_status_fields_are_bool(self, health_check_client):
+        resp = health_check_client.get("/")
+        data = resp.get_json()
+        assert isinstance(data["supabase_status"]["configured"], bool)
+        assert isinstance(data["supabase_status"]["connected"], bool)

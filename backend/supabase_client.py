@@ -5,6 +5,7 @@ unvalidated input without adding authorization checks in the caller — the
 service-role key bypasses Row Level Security entirely.
 """
 
+import logging
 import os
 import threading
 
@@ -44,3 +45,24 @@ def get_service_role_client() -> Client:
         assert url and key
         _client = create_client(url, key)
         return _client
+
+
+def check_connection() -> dict:
+    """Attempt a lightweight Supabase connection check at boot.
+
+    Returns {"configured": bool, "connected": bool}. Never raises,
+    never logs exception text (only the exception's class name) to
+    avoid leaking secret-bearing error messages.
+    """
+    try:
+        client = get_service_role_client()
+    except Exception:
+        return {"configured": False, "connected": False}
+
+    try:
+        client.table("profiles").select("id").limit(1).execute()
+    except Exception as exc:
+        logging.warning("Supabase connection check failed: %s", type(exc).__name__)
+        return {"configured": True, "connected": False}
+
+    return {"configured": True, "connected": True}

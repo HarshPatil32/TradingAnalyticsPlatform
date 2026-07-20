@@ -45,7 +45,7 @@ The server will start on `http://localhost:5001`
 
 Copy `backend/.env.example` to `backend/.env` for local development (`.env` is gitignored). On Render, set these in the dashboard instead.
 
-At startup, `app.py` validates vars listed in `_ENV_VAR_MANIFEST`. Optional vars log INFO if missing; required vars log WARNING. The health check (`GET /`) includes an `env_status` summary.
+At startup, `app.py` validates vars listed in `_ENV_VAR_MANIFEST`. Optional vars log INFO if missing; required vars log WARNING. When `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set, the app also runs a lightweight Supabase connection check (warn-only; logs WARNING on failure). The health check (`GET /`) includes an `env_status` summary and a `supabase_status` field (`configured`, `connected`).
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
