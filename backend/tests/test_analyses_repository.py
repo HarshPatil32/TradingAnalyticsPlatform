@@ -54,6 +54,13 @@ class FakeQuery:
         return rows
 
     def execute(self):
+        import httpx
+
+        self.table.client.execute_attempts += 1
+        if self.table.client.execute_failures_remaining > 0:
+            self.table.client.execute_failures_remaining -= 1
+            raise httpx.ReadTimeout("slow")
+
         if self.operation == "insert":
             row = {"id": _ANALYSIS_ID, **self.insert_payload}
             self.table.rows.append(row)
@@ -99,6 +106,8 @@ class FakeClient:
     def __init__(self, rows=None):
         self.rows = list(rows or [])
         self.last_query: FakeQuery | None = None
+        self.execute_attempts = 0
+        self.execute_failures_remaining = 0
 
     def table(self, name):
         assert name == "analyses"
@@ -345,3 +354,34 @@ class TestDeleteForUser:
         with pytest.raises(ValueError, match="user_id is required"):
             delete_for_user(_ANALYSIS_ID, "")
         assert fake_client.last_query is None
+
+
+class TestRetryBehavior:
+    def test_list_for_user_retries_read_timeout(self, fake_client, monkeypatch):
+        fake_client.rows = [
+            {
+                "id": "a",
+                "user_id": _USER_ID,
+                "created_at": "2024-01-01T00:00:00Z",
+            },
+        ]
+        fake_client.execute_failures_remaining = 1
+        monkeypatch.setattr("supabase_client.time.sleep", lambda _s: None)
+
+        from analyses_repository import list_for_user
+
+        rows = list_for_user(_USER_ID)
+        assert len(rows) == 1
+        assert fake_client.execute_attempts == 2
+
+    def test_create_does_not_retry_read_timeout(self, fake_client, monkeypatch):
+        monkeypatch.setattr("supabase_client.time.sleep", lambda _s: None)
+        fake_client.execute_failures_remaining = 1
+
+        import httpx
+
+        from analyses_repository import create
+
+        with pytest.raises(httpx.ReadTimeout):
+            create(user_id=_USER_ID, type="stock", result={"pnl": 100})
+        assert fake_client.execute_attempts == 1

@@ -44,7 +44,10 @@ def create(
         payload["instrument_count"] = instrument_count
 
     client = supabase_client.get_service_role_client()
-    response = client.table("analyses").insert(payload).execute()
+    response = supabase_client.execute_with_retry(
+        lambda: client.table("analyses").insert(payload).execute(),
+        idempotent=False,
+    )
     return cast(dict[str, Any], response.data[0])
 
 
@@ -55,8 +58,8 @@ def list_for_user(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
         raise ValueError(f"limit must be a positive integer up to {_MAX_LIST_LIMIT}")
 
     client = supabase_client.get_service_role_client()
-    response = (
-        client.table("analyses")
+    response = supabase_client.execute_with_retry(
+        lambda: client.table("analyses")
         .select("*")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
@@ -76,8 +79,8 @@ def get_for_user(analysis_id: str, user_id: str) -> dict[str, Any] | None:
     user_id = _require_non_empty_str(user_id, "user_id")
 
     client = supabase_client.get_service_role_client()
-    response = (
-        client.table("analyses")
+    response = supabase_client.execute_with_retry(
+        lambda: client.table("analyses")
         .select("*")
         .eq("id", analysis_id)
         .eq("user_id", user_id)
@@ -99,8 +102,8 @@ def delete_for_user(analysis_id: str, user_id: str) -> bool:
     user_id = _require_non_empty_str(user_id, "user_id")
 
     client = supabase_client.get_service_role_client()
-    response = (
-        client.table("analyses")
+    response = supabase_client.execute_with_retry(
+        lambda: client.table("analyses")
         .delete()
         .eq("id", analysis_id)
         .eq("user_id", user_id)

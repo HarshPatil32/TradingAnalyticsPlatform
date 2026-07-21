@@ -55,6 +55,7 @@ At startup, `app.py` validates vars listed in `_ENV_VAR_MANIFEST`. Optional vars
 | `SUPABASE_URL` | No | — | Supabase project URL. Dashboard: Project Settings → API. |
 | `SUPABASE_ANON_KEY` | No | — | Supabase anon/public key (client-safe, RLS-restricted). |
 | `SUPABASE_SERVICE_ROLE_KEY` | No | — | Supabase service-role key. **Server-side only** — never expose to the frontend. |
+| `SUPABASE_DB_TIMEOUT_SECONDS` | No | `10` | PostgREST request timeout in seconds for server-side Supabase queries. |
 | `SUPABASE_JWT_SECRET` | No | — | JWT secret for verifying Supabase-issued tokens on protected routes. Dashboard: Project Settings → API → JWT Settings → JWT Secret. |
 
 Supabase vars are optional until auth/DB integration is wired up; the app boots without them.

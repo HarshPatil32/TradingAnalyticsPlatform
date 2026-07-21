@@ -37,9 +37,12 @@ def increment(user_id: str, period: str | None = None) -> dict[str, Any]:
     period = _resolve_period(period)
 
     client = supabase_client.get_service_role_client()
-    response = client.rpc(
-        "increment_usage_counter", {"p_user_id": user_id, "p_period": period}
-    ).execute()
+    response = supabase_client.execute_with_retry(
+        lambda: client.rpc(
+            "increment_usage_counter", {"p_user_id": user_id, "p_period": period}
+        ).execute(),
+        idempotent=False,
+    )
     rows = cast(list[dict[str, Any]], response.data)
     return rows[0]
 
@@ -50,8 +53,8 @@ def read(user_id: str, period: str | None = None) -> int:
     period = _resolve_period(period)
 
     client = supabase_client.get_service_role_client()
-    response = (
-        client.table("usage_counters")
+    response = supabase_client.execute_with_retry(
+        lambda: client.table("usage_counters")
         .select("count")
         .eq("user_id", user_id)
         .eq("period", period)

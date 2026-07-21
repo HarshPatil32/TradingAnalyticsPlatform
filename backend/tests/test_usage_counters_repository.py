@@ -42,6 +42,13 @@ class FakeQuery:
         return rows
 
     def execute(self):
+        import httpx
+
+        self.table.client.execute_attempts += 1
+        if self.table.client.execute_failures_remaining > 0:
+            self.table.client.execute_failures_remaining -= 1
+            raise httpx.ReadTimeout("slow")
+
         matching = self._matching_rows()
         if self.limit_value is not None:
             matching = matching[: self.limit_value]
@@ -66,6 +73,13 @@ class FakeRpc:
         self.client.last_rpc = self
 
     def execute(self):
+        import httpx
+
+        self.client.execute_attempts += 1
+        if self.client.execute_failures_remaining > 0:
+            self.client.execute_failures_remaining -= 1
+            raise httpx.ConnectError("network down")
+
         if self.fn_name != "increment_usage_counter":
             raise AssertionError(f"unexpected rpc: {self.fn_name}")
 
@@ -86,6 +100,8 @@ class FakeClient:
         self.rows = list(rows or [])
         self.last_query: FakeQuery | None = None
         self.last_rpc: FakeRpc | None = None
+        self.execute_attempts = 0
+        self.execute_failures_remaining = 0
 
     def table(self, name):
         assert name == "usage_counters"
@@ -237,3 +253,46 @@ class TestRead:
         with pytest.raises(ValueError, match="period must be in YYYY-MM format"):
             read(_USER_ID, period="2026-13")
         assert fake_client.last_query is None
+
+
+class TestRetryBehavior:
+    def test_read_retries_read_timeout(self, fake_client, monkeypatch):
+        fake_client.rows = [
+            {"user_id": _USER_ID, "period": _PERIOD, "count": 5},
+        ]
+        fake_client.execute_failures_remaining = 1
+        monkeypatch.setattr("supabase_client.time.sleep", lambda _s: None)
+
+        from usage_counters_repository import read
+
+        assert read(_USER_ID, period=_PERIOD) == 5
+        assert fake_client.execute_attempts == 2
+
+    def test_increment_retries_connect_error(self, fake_client, monkeypatch):
+        fake_client.execute_failures_remaining = 1
+        monkeypatch.setattr("supabase_client.time.sleep", lambda _s: None)
+
+        from usage_counters_repository import increment
+
+        row = increment(_USER_ID, period=_PERIOD)
+        assert row["count"] == 1
+        assert fake_client.execute_attempts == 2
+
+    def test_increment_does_not_retry_read_timeout(self, fake_client, monkeypatch):
+        monkeypatch.setattr("supabase_client.time.sleep", lambda _s: None)
+
+        import httpx
+
+        class FailingRpc(FakeRpc):
+            def execute(self):
+                raise httpx.ReadTimeout("slow")
+
+        def rpc(fn_name, params):
+            return FailingRpc(fake_client, fn_name, params)
+
+        fake_client.rpc = rpc
+
+        from usage_counters_repository import increment
+
+        with pytest.raises(httpx.ReadTimeout):
+            increment(_USER_ID, period=_PERIOD)
