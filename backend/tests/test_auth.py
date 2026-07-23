@@ -10,6 +10,13 @@ from flask import Flask, g, jsonify
 _FAKE_SECRET = "fake-jwt-secret-value-padded-here"
 _OTHER_SECRET = "different-secret-value-padded-here"
 _DEFAULT_SUB = "user-123"
+_WWW_AUTHENTICATE = 'Bearer realm="api"'
+
+
+def _assert_unauthorized(response):
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "Unauthorized"}
+    assert response.headers.get("WWW-Authenticate") == _WWW_AUTHENTICATE
 
 
 def _make_token(
@@ -60,24 +67,21 @@ class TestRequireAuthSuccess:
 class TestRequireAuthFailure:
     def test_missing_authorization_header(self, protected_client):
         response = protected_client.get("/protected")
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_malformed_authorization_header(self, protected_client):
         response = protected_client.get(
             "/protected",
             headers={"Authorization": "Token abc"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_empty_bearer_token(self, protected_client):
         response = protected_client.get(
             "/protected",
             headers={"Authorization": "Bearer "},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_expired_token(self, protected_client):
         now = datetime.now(timezone.utc)
@@ -89,8 +93,7 @@ class TestRequireAuthFailure:
             "/protected",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_wrong_signature(self, protected_client):
         token = _make_token(secret=_OTHER_SECRET)
@@ -98,8 +101,7 @@ class TestRequireAuthFailure:
             "/protected",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_wrong_algorithm(self, protected_client):
         now = datetime.now(timezone.utc)
@@ -114,8 +116,7 @@ class TestRequireAuthFailure:
             "/protected",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_wrong_audience(self, protected_client):
         token = _make_token(aud="service_role")
@@ -123,8 +124,7 @@ class TestRequireAuthFailure:
             "/protected",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_empty_sub_claim(self, protected_client):
         token = _make_token(sub="")
@@ -132,8 +132,7 @@ class TestRequireAuthFailure:
             "/protected",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_absent_sub_claim(self, protected_client):
         now = datetime.now(timezone.utc)
@@ -147,8 +146,7 @@ class TestRequireAuthFailure:
             "/protected",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
     def test_missing_jwt_secret(self, protected_client, monkeypatch):
         monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
@@ -157,8 +155,7 @@ class TestRequireAuthFailure:
             "/protected",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.get_json() == {"error": "Unauthorized"}
+        _assert_unauthorized(response)
 
 
 class TestRequireAuthLogging:

@@ -9,12 +9,14 @@ from __future__ import annotations
 import functools
 import logging
 import os
+from typing import Any
 
 import jwt
 from flask import g, jsonify, request
 
 _JWT_ALGORITHMS = ["HS256"]
 _EXPECTED_AUDIENCE = "authenticated"
+_WWW_AUTHENTICATE = 'Bearer realm="api"'
 
 _logger = logging.getLogger(__name__)
 
@@ -29,13 +31,19 @@ def _extract_bearer_token(header_value: str | None) -> str | None:
     return token or None
 
 
-def _decode_supabase_jwt(token: str, secret: str) -> dict:
+def _decode_supabase_jwt(token: str, secret: str) -> dict[str, Any]:
     return jwt.decode(
         token,
         secret,
         algorithms=_JWT_ALGORITHMS,
         audience=_EXPECTED_AUDIENCE,
     )
+
+
+def _unauthorized():
+    response = jsonify({"error": "Unauthorized"})
+    response.headers["WWW-Authenticate"] = _WWW_AUTHENTICATE
+    return response, 401
 
 
 def require_auth(view_func):
@@ -46,21 +54,21 @@ def require_auth(view_func):
         secret = os.environ.get("SUPABASE_JWT_SECRET")
         if not secret:
             _logger.warning("Auth rejected: SUPABASE_JWT_SECRET is not configured")
-            return jsonify({"error": "Unauthorized"}), 401
+            return _unauthorized()
 
         token = _extract_bearer_token(request.headers.get("Authorization"))
         if not token:
-            return jsonify({"error": "Unauthorized"}), 401
+            return _unauthorized()
 
         try:
             claims = _decode_supabase_jwt(token, secret)
         except jwt.InvalidTokenError as exc:
             _logger.warning("Auth rejected: %s", type(exc).__name__)
-            return jsonify({"error": "Unauthorized"}), 401
+            return _unauthorized()
 
         user_id = claims.get("sub")
         if not isinstance(user_id, str) or not user_id.strip():
-            return jsonify({"error": "Unauthorized"}), 401
+            return _unauthorized()
 
         g.user_id = user_id.strip()
         return view_func(*args, **kwargs)
