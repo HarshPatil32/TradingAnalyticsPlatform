@@ -36,6 +36,24 @@ supabase db push
 
 This applies only migrations not yet recorded on the linked project. It does **not** run `seed.sql`. Seed data is for local development only.
 
+## Auth rate limiting
+
+Login, signup, password reset, OTP/magic-link verification, and token refresh are handled by Supabase Auth (GoTrue), not by Flask routes. Rate limits for those flows are configured in `supabase/config.toml` under `[auth.rate_limit]`.
+
+Requires the CLI to be linked to a hosted project (`supabase login`, then `supabase link` — see [Prerequisites](#prerequisites)). Changes to that section take effect on a hosted project only after:
+
+```bash
+supabase config push
+```
+
+Review the printed diff before confirming. `config push` can update other sections under `[auth]`, `[api]`, and `[db]`, not just rate limits.
+
+After pushing, confirm the values in the Supabase Dashboard under **Authentication → Rate Limits**. For prod, pass the prod project ref explicitly as part of an explicit, reviewed deployment step:
+
+```bash
+supabase config push --project-ref <prod-project-ref>
+```
+
 ## Migrations vs seed.sql
 
 | | Migrations | `seed.sql` |
