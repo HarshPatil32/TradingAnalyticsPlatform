@@ -12,6 +12,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.utils import secure_filename
 
 import supabase_client
+from auth import optional_auth
 from csv_analyzer import FreeTierLimitExceeded, analyze_uploaded_trades
 
 # Load env vars early so they are available at module scope (picked up by gunicorn too)
@@ -819,6 +820,7 @@ def _safe_filename(raw: str) -> str:
 
 
 @app.route("/analyze-trades", methods=["POST"])
+@optional_auth
 def analyze_trades():
     """Accept a CSV upload and return sanitized trade analysis."""
 
