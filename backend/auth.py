@@ -1,7 +1,10 @@
-"""Supabase JWT verification for protected Flask routes.
+"""Supabase JWT verification for Flask routes.
 
 Apply @require_auth to routes that need a verified user_id before calling
 service-role repositories (which bypass RLS).
+
+Apply @optional_auth to routes usable while logged out; they receive g.user_id
+when a valid Supabase JWT is present, otherwise g.user_id is None.
 """
 
 from __future__ import annotations
@@ -71,6 +74,37 @@ def require_auth(view_func):
             return _unauthorized()
 
         g.user_id = user_id.strip()
+        return view_func(*args, **kwargs)
+
+    return wrapper
+
+
+def optional_auth(view_func):
+    """Attach g.user_id when a valid Supabase JWT is present; otherwise None."""
+
+    @functools.wraps(view_func)
+    def wrapper(*args, **kwargs):
+        g.user_id = None
+
+        secret = os.environ.get("SUPABASE_JWT_SECRET")
+        if not secret:
+            _logger.info("Optional auth skipped: SUPABASE_JWT_SECRET is not configured")
+            return view_func(*args, **kwargs)
+
+        token = _extract_bearer_token(request.headers.get("Authorization"))
+        if not token:
+            return view_func(*args, **kwargs)
+
+        try:
+            claims = _decode_supabase_jwt(token, secret)
+        except jwt.InvalidTokenError as exc:
+            _logger.warning("Optional auth ignored: %s", type(exc).__name__)
+            return view_func(*args, **kwargs)
+
+        user_id = claims.get("sub")
+        if isinstance(user_id, str) and user_id.strip():
+            g.user_id = user_id.strip()
+
         return view_func(*args, **kwargs)
 
     return wrapper
