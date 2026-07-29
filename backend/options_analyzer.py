@@ -34,6 +34,8 @@ normalize_options_broker_format (later task).
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 
 from csv_analyzer import sanitize_csv
@@ -63,6 +65,18 @@ REQUIRED_OPTIONS_COLUMNS: frozenset[str] = frozenset(
 )
 
 OPTIONAL_OPTIONS_COLUMNS: frozenset[str] = frozenset({"multiplier", "fees"})
+
+# Same keys as stock summary uploads until parse_options_summary defines otherwise.
+REQUIRED_OPTIONS_SUMMARY_COLUMNS: frozenset[str] = frozenset(
+    {
+        "initial_capital",
+        "final_balance",
+        "num_trades",
+        "win_rate",
+        "start_date",
+        "end_date",
+    }
+)
 
 VALID_OPTION_TYPES: frozenset[str] = frozenset({"CALL", "PUT"})
 
@@ -97,8 +111,36 @@ def sanitize_options_csv(csv_data: str) -> str:
 
 def detect_options_format(csv_data: str) -> str:
     """Return 'detailed' or 'summary' based on the CSV header columns."""
-    # TODO:
-    raise NotImplementedError
+    reader = csv.reader(io.StringIO(csv_data))
+    try:
+        header_row = next(reader)
+    except StopIteration:
+        raise ValueError("CSV is empty or has no header row")
+
+    actual_cols: frozenset[str] = frozenset(
+        col.strip().lower() for col in header_row if col.strip()
+    )
+
+    if not actual_cols:
+        raise ValueError("CSV is empty or has no header row")
+
+    if REQUIRED_OPTIONS_COLUMNS <= actual_cols:
+        return "detailed"
+
+    if REQUIRED_OPTIONS_SUMMARY_COLUMNS <= actual_cols:
+        return "summary"
+
+    missing_detailed = REQUIRED_OPTIONS_COLUMNS - actual_cols
+    missing_summary = REQUIRED_OPTIONS_SUMMARY_COLUMNS - actual_cols
+    if len(missing_detailed) <= len(missing_summary):
+        raise ValueError(
+            f"Your options CSV looks like a trade-by-trade upload but is missing these columns: {sorted(missing_detailed)}. "
+            "Please check your file headers."
+        )
+    raise ValueError(
+        f"Your options CSV looks like a summary upload but is missing these columns: {sorted(missing_summary)}. "
+        "Please check your file headers."
+    )
 
 
 def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
@@ -108,7 +150,11 @@ def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dic
 
 
 def parse_options_summary(csv_data: str) -> dict:
-    """Parse a summary-format options CSV into a single dict of aggregate metrics."""
+    """Parse a summary-format options CSV into a single dict of aggregate metrics.
+
+    Expects headers matching REQUIRED_OPTIONS_SUMMARY_COLUMNS (currently the same
+    keys as stock summary uploads; revisit if the options summary schema changes).
+    """
     # TODO:
     raise NotImplementedError
 

@@ -33,6 +33,23 @@ class TestOptionsAnalyzerSkeleton:
             options_analyzer.OPTIONAL_OPTIONS_COLUMNS
         )
 
+    def test_required_options_summary_columns_defined(self):
+        assert options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS == frozenset(
+            {
+                "initial_capital",
+                "final_balance",
+                "num_trades",
+                "win_rate",
+                "start_date",
+                "end_date",
+            }
+        )
+
+    def test_summary_columns_disjoint_from_required(self):
+        assert options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS.isdisjoint(
+            options_analyzer.REQUIRED_OPTIONS_COLUMNS
+        )
+
     def test_valid_option_types(self):
         assert options_analyzer.VALID_OPTION_TYPES == frozenset({"CALL", "PUT"})
 
@@ -45,6 +62,7 @@ class TestOptionsAnalyzerSkeleton:
         for name in (
             "REQUIRED_OPTIONS_COLUMNS",
             "OPTIONAL_OPTIONS_COLUMNS",
+            "REQUIRED_OPTIONS_SUMMARY_COLUMNS",
             "VALID_OPTION_TYPES",
             "VALID_OPTION_ACTIONS",
         ):
@@ -58,7 +76,6 @@ class TestOptionsAnalyzerSkeleton:
         "func_name",
         [
             "normalize_options_broker_format",
-            "detect_options_format",
             "parse_options_detailed",
             "parse_options_summary",
             "validate_options",
