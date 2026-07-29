@@ -57,7 +57,6 @@ class TestOptionsAnalyzerSkeleton:
     @pytest.mark.parametrize(
         "func_name",
         [
-            "sanitize_options_csv",
             "normalize_options_broker_format",
             "detect_options_format",
             "parse_options_detailed",

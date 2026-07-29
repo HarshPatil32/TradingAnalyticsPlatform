@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import logging
 
+from csv_analyzer import sanitize_csv
+
 logger = logging.getLogger(__name__)
 
 # from options_costs import (
@@ -90,8 +92,7 @@ class OptionsFreeTierLimitExceeded(ValueError):
 
 def sanitize_options_csv(csv_data: str) -> str:
     """Strip BOM, normalise line endings, and guard against unsafe CSV content."""
-    # TODO:
-    raise NotImplementedError
+    return sanitize_csv(csv_data)
 
 
 def detect_options_format(csv_data: str) -> str:
