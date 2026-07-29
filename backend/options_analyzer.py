@@ -3,6 +3,33 @@ options_analyzer.py
 -------------------
 Parses, validates, and normalises uploaded options trade history CSV files
 before handing the cleaned data off to the options analysis modules.
+
+Options row schema
+
+Required columns (see REQUIRED_OPTIONS_COLUMNS):
+    date          Trade date, YYYY-MM-DD.
+    underlying    Ticker symbol of the underlying asset.
+    option_type   One of VALID_OPTION_TYPES (CALL or PUT).
+    action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC).
+    strike        Positive float, strike price in USD per share.
+    expiration    Option expiration date, YYYY-MM-DD (distinct from date).
+    contracts     Positive integer, number of contracts.
+    premium       Positive float, quoted per share; total cash is
+                  premium * contracts * multiplier.
+
+Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
+    multiplier    Positive integer; defaults to DEFAULT_CONTRACT_MULTIPLIER
+                  (100) when absent or blank.
+    fees          Non-negative float (0.0 is valid), user-reported broker fees
+                  for the leg; defaults to 0.0 when absent or blank. Use a
+                  non-negative check when parsing, not a positive-only parser.
+                  Distinct from estimated costs computed by options_costs when
+                  this column is missing.
+
+Action vocabulary uses open/close semantics (BTO/STO/BTC/STC) rather than
+plain BUY/SELL so P&L pairing and risk checks can distinguish opening from
+closing legs. Broker-specific exports are normalised to this set by
+normalize_options_broker_format (later task).
 """
 
 from __future__ import annotations
@@ -20,7 +47,6 @@ logger = logging.getLogger(__name__)
 # Constants and Exceptions
 
 
-# Optional columns per Appendix A: multiplier, fees
 REQUIRED_OPTIONS_COLUMNS: frozenset[str] = frozenset(
     {
         "date",
@@ -34,7 +60,14 @@ REQUIRED_OPTIONS_COLUMNS: frozenset[str] = frozenset(
     }
 )
 
-DEFAULT_CONTRACT_MULTIPLIER = 100
+OPTIONAL_OPTIONS_COLUMNS: frozenset[str] = frozenset({"multiplier", "fees"})
+
+VALID_OPTION_TYPES: frozenset[str] = frozenset({"CALL", "PUT"})
+
+# Open/close semantics required for P&L pairing and risk detection.
+VALID_OPTION_ACTIONS: frozenset[str] = frozenset({"BTO", "STO", "BTC", "STC"})
+
+DEFAULT_CONTRACT_MULTIPLIER: int = 100
 
 
 class OptionsFreeTierLimitExceeded(ValueError):
