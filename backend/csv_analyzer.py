@@ -13,6 +13,7 @@ import logging
 import math
 import re
 import statistics
+from collections.abc import Iterable
 from datetime import datetime
 
 from benchmark import fetch_benchmark
@@ -116,6 +117,25 @@ def _require_field(value: str | None, row_num: int, name: str) -> str:
     if value is None or not str(value).strip():
         raise ValueError(f"Row {row_num}: {name} is blank")
     return str(value).strip()
+
+
+def normalize_headers(header_row: Iterable[str]) -> frozenset[str]:
+    """Return lowercase, stripped header names, ignoring blank columns."""
+    return frozenset(col.strip().lower() for col in header_row if col.strip())
+
+
+def _map_required_columns(
+    fieldnames: Iterable[str],
+    required: frozenset[str],
+    error_prefix: str,
+    error_suffix: str,
+) -> dict[str, str]:
+    """Map normalized column names to original fieldnames; raise if required are missing."""
+    norm_to_original: dict[str, str] = {f.strip().lower(): f for f in fieldnames}
+    missing = required - norm_to_original.keys()
+    if missing:
+        raise ValueError(f"{error_prefix} {sorted(missing)}{error_suffix}")
+    return {norm: norm_to_original[norm] for norm in required}
 
 
 def _parse_positive_float(value: str | None, field: str, row_num: int) -> float:
@@ -251,7 +271,7 @@ def _detect_broker_format(csv_data: str) -> str | None:
         header_row = next(reader)
     except StopIteration:
         return None
-    headers = frozenset(col.strip().lower() for col in header_row if col.strip())
+    headers = normalize_headers(header_row)
     if _ROBINHOOD_HEADERS <= headers:
         return "robinhood"
     return None
@@ -311,9 +331,7 @@ def detect_format(csv_data: str) -> str:
     except StopIteration:
         raise ValueError("CSV is empty or has no header row")
 
-    actual_cols: frozenset[str] = frozenset(
-        col.strip().lower() for col in header_row if col.strip()
-    )
+    actual_cols = normalize_headers(header_row)
 
     if not actual_cols:
         raise ValueError("CSV is empty or has no header row")
@@ -346,17 +364,12 @@ def parse_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
     if reader.fieldnames is None:
         raise ValueError("CSV is empty or has no header row")
 
-    # Build normalized (lowercase, stripped) -> original fieldname mapping
-    norm_to_original: dict[str, str] = {f.strip().lower(): f for f in reader.fieldnames}
-
-    missing = REQUIRED_DETAILED_COLUMNS - norm_to_original.keys()
-    if missing:
-        raise ValueError(
-            f"Your CSV is missing required columns: {sorted(missing)}. Please check your file headers."
-        )
-
-    # Access each required column by its original (un-normalized) fieldname
-    col = {norm: norm_to_original[norm] for norm in REQUIRED_DETAILED_COLUMNS}
+    col = _map_required_columns(
+        reader.fieldnames,
+        REQUIRED_DETAILED_COLUMNS,
+        "Your CSV is missing required columns:",
+        ". Please check your file headers.",
+    )
 
     trades: list[dict] = []
     for row_num, raw_row in enumerate(reader, start=2):
@@ -427,17 +440,12 @@ def parse_summary(csv_data: str) -> dict:
     if reader.fieldnames is None:
         raise ValueError("CSV is empty or has no header row")
 
-    # Normalize headers and check for required columns
-    norm_to_original: dict[str, str] = {f.strip().lower(): f for f in reader.fieldnames}
-    actual_cols = set(norm_to_original.keys())
-    missing = REQUIRED_SUMMARY_KEYS - actual_cols
-    if missing:
-        raise ValueError(
-            f"Your CSV is missing required fields: {sorted(missing)}. Please check your column names."
-        )
-
-    # Map normalized required keys to original header
-    col = {norm: norm_to_original[norm] for norm in REQUIRED_SUMMARY_KEYS}
+    col = _map_required_columns(
+        reader.fieldnames,
+        REQUIRED_SUMMARY_KEYS,
+        "Your CSV is missing required fields:",
+        ". Please check your column names.",
+    )
 
     data_row: dict | None = None
     for raw_row in reader:

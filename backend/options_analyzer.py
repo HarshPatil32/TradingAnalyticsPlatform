@@ -38,7 +38,7 @@ import csv
 import io
 import logging
 
-from csv_analyzer import sanitize_csv
+from csv_analyzer import normalize_headers, sanitize_csv
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +117,7 @@ def detect_options_format(csv_data: str) -> str:
     except StopIteration:
         raise ValueError("CSV is empty or has no header row")
 
-    actual_cols: frozenset[str] = frozenset(
-        col.strip().lower() for col in header_row if col.strip()
-    )
+    actual_cols = normalize_headers(header_row)
 
     if not actual_cols:
         raise ValueError("CSV is empty or has no header row")
