@@ -38,7 +38,7 @@ import csv
 import io
 import logging
 
-from csv_analyzer import normalize_headers, sanitize_csv
+from csv_analyzer import _is_blank_csv_row, normalize_headers, sanitize_csv
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +92,9 @@ class OptionsFreeTierLimitExceeded(ValueError):
     pass
 
 
+FREE_TIER_OPTIONS_ROW_LIMIT = 100
+
+
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
@@ -142,8 +145,28 @@ def detect_options_format(csv_data: str) -> str:
 
 
 def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
-    """Parse a detailed options trade-list CSV into a list of typed trade dicts."""
-    # TODO:
+    """Parse a detailed options trade-list CSV into a list of typed trade dicts.
+
+    If is_free_tier is True, enforce the free tier options row limit.
+    """
+    reader = csv.DictReader(io.StringIO(csv_data))
+
+    if reader.fieldnames is None:
+        raise ValueError("CSV is empty or has no header row")
+
+    row_count = 0
+    for raw_row in reader:
+        if _is_blank_csv_row(raw_row):
+            continue
+
+        if is_free_tier and row_count >= FREE_TIER_OPTIONS_ROW_LIMIT:
+            raise OptionsFreeTierLimitExceeded(
+                f"Options row count exceeds the free tier limit of {FREE_TIER_OPTIONS_ROW_LIMIT}"
+            )
+
+        row_count += 1
+
+    # Full field parsing lands in EPIC 7.1.
     raise NotImplementedError
 
 

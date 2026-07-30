@@ -72,6 +72,10 @@ class TestOptionsAnalyzerSkeleton:
         assert options_analyzer.DEFAULT_CONTRACT_MULTIPLIER == 100
         assert isinstance(options_analyzer.DEFAULT_CONTRACT_MULTIPLIER, int)
 
+    def test_free_tier_options_row_limit(self):
+        assert options_analyzer.FREE_TIER_OPTIONS_ROW_LIMIT == 100
+        assert isinstance(options_analyzer.FREE_TIER_OPTIONS_ROW_LIMIT, int)
+
     @pytest.mark.parametrize(
         "func_name",
         [

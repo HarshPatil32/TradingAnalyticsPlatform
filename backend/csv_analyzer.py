@@ -113,6 +113,20 @@ def _is_numeric_cell(value: str) -> bool:
         return False
 
 
+def _is_blank_csv_cell(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    if isinstance(value, list):
+        return all(_is_blank_csv_cell(item) for item in value)
+    return False
+
+
+def _is_blank_csv_row(raw_row: dict) -> bool:
+    return all(_is_blank_csv_cell(v) for v in raw_row.values())
+
+
 def _require_field(value: str | None, row_num: int, name: str) -> str:
     if value is None or not str(value).strip():
         raise ValueError(f"Row {row_num}: {name} is blank")
@@ -374,7 +388,7 @@ def parse_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
     trades: list[dict] = []
     for row_num, raw_row in enumerate(reader, start=2):
         # Skip entirely blank rows before checking the limit
-        if all(v is None or v.strip() == "" for v in raw_row.values()):
+        if _is_blank_csv_row(raw_row):
             continue
 
         # Enforce limit on non-blank rows only
@@ -449,7 +463,7 @@ def parse_summary(csv_data: str) -> dict:
 
     data_row: dict | None = None
     for raw_row in reader:
-        if all(v is None or v.strip() == "" for v in raw_row.values()):
+        if _is_blank_csv_row(raw_row):
             continue
         if data_row is not None:
             raise ValueError("Summary CSV must contain exactly one data row")
