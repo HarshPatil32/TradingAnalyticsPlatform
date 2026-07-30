@@ -37,6 +37,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import math
 
 from csv_analyzer import _is_blank_csv_row, normalize_headers, sanitize_csv
 
@@ -99,7 +100,28 @@ FREE_TIER_OPTIONS_ROW_LIMIT = 100
 # Private helpers
 # ---------------------------------------------------------------------------
 
-# Future helpers (OCC symbol parsing, enum validation) land here in EPIC 6/7.
+
+def _parse_positive_int(value: str, field: str, row_num: int) -> int:
+    """Parse a string as a positive integer, raising ValueError with a clear message."""
+    try:
+        result = float(value)
+    except ValueError:
+        raise ValueError(f"Row {row_num}: {field} '{value}' is not a number")
+    if math.isnan(result) or math.isinf(result) or result <= 0 or result % 1 != 0:
+        raise ValueError(
+            f"Row {row_num}: {field} must be a positive integer, got '{value}'"
+        )
+    return int(result)
+
+
+def _parse_multiplier(value: str | None, row_num: int) -> int:
+    """Parse optional multiplier; default to DEFAULT_CONTRACT_MULTIPLIER when blank."""
+    if value is None:
+        return DEFAULT_CONTRACT_MULTIPLIER
+    stripped = value.strip()
+    if not stripped:
+        return DEFAULT_CONTRACT_MULTIPLIER
+    return _parse_positive_int(stripped, "multiplier", row_num)
 
 
 # ---------------------------------------------------------------------------
