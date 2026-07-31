@@ -265,6 +265,16 @@ class TestParseDetailedFreeTierLimit:
         result = parse_detailed(header + rows + trailing_blanks)
         assert len(result) == FREE_TIER_TRADE_LIMIT
 
+    def test_blank_rows_with_extra_columns_not_counted(self):
+        header = "date,symbol,action,price,shares\n"
+        rows = "".join(
+            f"2024-01-{(i % 28) + 1:02d},AAPL,BUY,100.00,1\n"
+            for i in range(FREE_TIER_TRADE_LIMIT)
+        )
+        trailing_blanks = ",,,,,\n,,,,,\n"
+        result = parse_detailed(header + rows + trailing_blanks)
+        assert len(result) == FREE_TIER_TRADE_LIMIT
+
 
 class TestParseDetailedWhitespaceCells:
     def test_whitespace_padded_data_cells_parsed(self):

@@ -3,11 +3,43 @@ options_analyzer.py
 -------------------
 Parses, validates, and normalises uploaded options trade history CSV files
 before handing the cleaned data off to the options analysis modules.
+
+Options row schema
+
+Required columns (see REQUIRED_OPTIONS_COLUMNS):
+    date          Trade date, YYYY-MM-DD.
+    underlying    Ticker symbol of the underlying asset.
+    option_type   One of VALID_OPTION_TYPES (CALL or PUT).
+    action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC).
+    strike        Positive float, strike price in USD per share.
+    expiration    Option expiration date, YYYY-MM-DD (distinct from date).
+    contracts     Positive integer, number of contracts.
+    premium       Positive float, quoted per share; total cash is
+                  premium * contracts * multiplier.
+
+Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
+    multiplier    Positive integer; defaults to DEFAULT_CONTRACT_MULTIPLIER
+                  (100) when absent or blank.
+    fees          Non-negative float (0.0 is valid), user-reported broker fees
+                  for the leg; defaults to 0.0 when absent or blank. Use a
+                  non-negative check when parsing, not a positive-only parser.
+                  Distinct from estimated costs computed by options_costs when
+                  this column is missing.
+
+Action vocabulary uses open/close semantics (BTO/STO/BTC/STC) rather than
+plain BUY/SELL so P&L pairing and risk checks can distinguish opening from
+closing legs. Broker-specific exports are normalised to this set by
+normalize_options_broker_format (later task).
 """
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
+import math
+
+from csv_analyzer import _is_blank_csv_row, normalize_headers, sanitize_csv
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +52,6 @@ logger = logging.getLogger(__name__)
 # Constants and Exceptions
 
 
-# Optional columns per Appendix A: multiplier, fees
 REQUIRED_OPTIONS_COLUMNS: frozenset[str] = frozenset(
     {
         "date",
@@ -34,7 +65,26 @@ REQUIRED_OPTIONS_COLUMNS: frozenset[str] = frozenset(
     }
 )
 
-DEFAULT_CONTRACT_MULTIPLIER = 100
+OPTIONAL_OPTIONS_COLUMNS: frozenset[str] = frozenset({"multiplier", "fees"})
+
+# Same keys as stock summary uploads until parse_options_summary defines otherwise.
+REQUIRED_OPTIONS_SUMMARY_COLUMNS: frozenset[str] = frozenset(
+    {
+        "initial_capital",
+        "final_balance",
+        "num_trades",
+        "win_rate",
+        "start_date",
+        "end_date",
+    }
+)
+
+VALID_OPTION_TYPES: frozenset[str] = frozenset({"CALL", "PUT"})
+
+# Open/close semantics required for P&L pairing and risk detection.
+VALID_OPTION_ACTIONS: frozenset[str] = frozenset({"BTO", "STO", "BTC", "STC"})
+
+DEFAULT_CONTRACT_MULTIPLIER: int = 100
 
 
 class OptionsFreeTierLimitExceeded(ValueError):
@@ -43,11 +93,35 @@ class OptionsFreeTierLimitExceeded(ValueError):
     pass
 
 
+FREE_TIER_OPTIONS_ROW_LIMIT = 100
+
+
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 
-# Future helpers (OCC symbol parsing, enum validation) land here in EPIC 6/7.
+
+def _parse_positive_int(value: str, field: str, row_num: int) -> int:
+    """Parse a string as a positive integer, raising ValueError with a clear message."""
+    try:
+        result = float(value)
+    except ValueError:
+        raise ValueError(f"Row {row_num}: {field} '{value}' is not a number")
+    if math.isnan(result) or math.isinf(result) or result <= 0 or result % 1 != 0:
+        raise ValueError(
+            f"Row {row_num}: {field} must be a positive integer, got '{value}'"
+        )
+    return int(result)
+
+
+def _parse_multiplier(value: str | None, row_num: int) -> int:
+    """Parse optional multiplier; default to DEFAULT_CONTRACT_MULTIPLIER when blank."""
+    if value is None:
+        return DEFAULT_CONTRACT_MULTIPLIER
+    stripped = value.strip()
+    if not stripped:
+        return DEFAULT_CONTRACT_MULTIPLIER
+    return _parse_positive_int(stripped, "multiplier", row_num)
 
 
 # ---------------------------------------------------------------------------
@@ -57,24 +131,73 @@ class OptionsFreeTierLimitExceeded(ValueError):
 
 def sanitize_options_csv(csv_data: str) -> str:
     """Strip BOM, normalise line endings, and guard against unsafe CSV content."""
-    # TODO:
-    raise NotImplementedError
+    return sanitize_csv(csv_data)
 
 
 def detect_options_format(csv_data: str) -> str:
     """Return 'detailed' or 'summary' based on the CSV header columns."""
-    # TODO:
-    raise NotImplementedError
+    reader = csv.reader(io.StringIO(csv_data))
+    try:
+        header_row = next(reader)
+    except StopIteration:
+        raise ValueError("CSV is empty or has no header row")
+
+    actual_cols = normalize_headers(header_row)
+
+    if not actual_cols:
+        raise ValueError("CSV is empty or has no header row")
+
+    if REQUIRED_OPTIONS_COLUMNS <= actual_cols:
+        return "detailed"
+
+    if REQUIRED_OPTIONS_SUMMARY_COLUMNS <= actual_cols:
+        return "summary"
+
+    missing_detailed = REQUIRED_OPTIONS_COLUMNS - actual_cols
+    missing_summary = REQUIRED_OPTIONS_SUMMARY_COLUMNS - actual_cols
+    if len(missing_detailed) <= len(missing_summary):
+        raise ValueError(
+            f"Your options CSV looks like a trade-by-trade upload but is missing these columns: {sorted(missing_detailed)}. "
+            "Please check your file headers."
+        )
+    raise ValueError(
+        f"Your options CSV looks like a summary upload but is missing these columns: {sorted(missing_summary)}. "
+        "Please check your file headers."
+    )
 
 
 def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
-    """Parse a detailed options trade-list CSV into a list of typed trade dicts."""
-    # TODO:
+    """Parse a detailed options trade-list CSV into a list of typed trade dicts.
+
+    If is_free_tier is True, enforce the free tier options row limit.
+    """
+    reader = csv.DictReader(io.StringIO(csv_data))
+
+    if reader.fieldnames is None:
+        raise ValueError("CSV is empty or has no header row")
+
+    row_count = 0
+    for raw_row in reader:
+        if _is_blank_csv_row(raw_row):
+            continue
+
+        if is_free_tier and row_count >= FREE_TIER_OPTIONS_ROW_LIMIT:
+            raise OptionsFreeTierLimitExceeded(
+                f"Options row count exceeds the free tier limit of {FREE_TIER_OPTIONS_ROW_LIMIT}"
+            )
+
+        row_count += 1
+
+    # Full field parsing lands in EPIC 7.1.
     raise NotImplementedError
 
 
 def parse_options_summary(csv_data: str) -> dict:
-    """Parse a summary-format options CSV into a single dict of aggregate metrics."""
+    """Parse a summary-format options CSV into a single dict of aggregate metrics.
+
+    Expects headers matching REQUIRED_OPTIONS_SUMMARY_COLUMNS (currently the same
+    keys as stock summary uploads; revisit if the options summary schema changes).
+    """
     # TODO:
     raise NotImplementedError
 

@@ -10,18 +10,76 @@ class TestOptionsAnalyzerSkeleton:
         assert options_analyzer.__name__ == "options_analyzer"
 
     def test_required_options_columns_defined(self):
-        assert "date" in options_analyzer.REQUIRED_OPTIONS_COLUMNS
-        assert "premium" in options_analyzer.REQUIRED_OPTIONS_COLUMNS
+        assert options_analyzer.REQUIRED_OPTIONS_COLUMNS == frozenset(
+            {
+                "date",
+                "underlying",
+                "option_type",
+                "action",
+                "strike",
+                "expiration",
+                "contracts",
+                "premium",
+            }
+        )
+
+    def test_optional_options_columns_defined(self):
+        assert options_analyzer.OPTIONAL_OPTIONS_COLUMNS == frozenset(
+            {"multiplier", "fees"}
+        )
+
+    def test_required_and_optional_columns_disjoint(self):
+        assert options_analyzer.REQUIRED_OPTIONS_COLUMNS.isdisjoint(
+            options_analyzer.OPTIONAL_OPTIONS_COLUMNS
+        )
+
+    def test_required_options_summary_columns_defined(self):
+        assert options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS == frozenset(
+            {
+                "initial_capital",
+                "final_balance",
+                "num_trades",
+                "win_rate",
+                "start_date",
+                "end_date",
+            }
+        )
+
+    def test_summary_columns_disjoint_from_required(self):
+        assert options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS.isdisjoint(
+            options_analyzer.REQUIRED_OPTIONS_COLUMNS
+        )
+
+    def test_valid_option_types(self):
+        assert options_analyzer.VALID_OPTION_TYPES == frozenset({"CALL", "PUT"})
+
+    def test_valid_option_actions(self):
+        assert options_analyzer.VALID_OPTION_ACTIONS == frozenset(
+            {"BTO", "STO", "BTC", "STC"}
+        )
+
+    def test_schema_constants_are_frozensets(self):
+        for name in (
+            "REQUIRED_OPTIONS_COLUMNS",
+            "OPTIONAL_OPTIONS_COLUMNS",
+            "REQUIRED_OPTIONS_SUMMARY_COLUMNS",
+            "VALID_OPTION_TYPES",
+            "VALID_OPTION_ACTIONS",
+        ):
+            assert isinstance(getattr(options_analyzer, name), frozenset)
 
     def test_default_contract_multiplier(self):
         assert options_analyzer.DEFAULT_CONTRACT_MULTIPLIER == 100
+        assert isinstance(options_analyzer.DEFAULT_CONTRACT_MULTIPLIER, int)
+
+    def test_free_tier_options_row_limit(self):
+        assert options_analyzer.FREE_TIER_OPTIONS_ROW_LIMIT == 100
+        assert isinstance(options_analyzer.FREE_TIER_OPTIONS_ROW_LIMIT, int)
 
     @pytest.mark.parametrize(
         "func_name",
         [
-            "sanitize_options_csv",
             "normalize_options_broker_format",
-            "detect_options_format",
             "parse_options_detailed",
             "parse_options_summary",
             "validate_options",
