@@ -251,6 +251,8 @@ def analyze_uploaded_options(csv_data: str) -> dict:
 
 # ---------------------------------------------------------------------------
 # Broker format normalisation
+# Shared symbol decoders (_parse_robinhood_option_description, _parse_occ_option_symbol)
+# are broker-agnostic; future broker normalizers should reuse them instead of re-parsing.
 # ---------------------------------------------------------------------------
 
 
@@ -287,6 +289,42 @@ def _parse_robinhood_option_description(description: str) -> dict | None:
         "underlying": match["underlying"].upper(),
         "option_type": match["option_type"].upper(),
         "strike": match["strike"].replace(",", ""),
+        "expiration": expiration,
+    }
+
+
+_OCC_SUFFIX_LEN = 15  # 6 date + 1 type + 8 strike; must match _OCC_SUFFIX_RE
+_OCC_SUFFIX_RE = re.compile(
+    r"^(?P<date>\d{6})(?P<type>[CP])(?P<strike>\d{8})$",
+    re.IGNORECASE,
+)
+
+
+def _parse_occ_option_symbol(symbol: str) -> dict | None:
+    """Parse an OCC symbol (root + YYMMDD + C/P + 8-digit strike*1000)."""
+    stripped = symbol.strip()
+    if len(stripped) <= _OCC_SUFFIX_LEN:
+        return None
+    root = stripped[:-_OCC_SUFFIX_LEN].strip()
+    if not root:
+        return None
+    match = _OCC_SUFFIX_RE.match(stripped[-_OCC_SUFFIX_LEN:])
+    if not match:
+        return None
+    try:
+        # %y pivot: Python maps 00-68 -> 2000-2068, 69-99 -> 1969-1999
+        expiration = datetime.strptime(match["date"], "%y%m%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+    strike_int = int(match["strike"])
+    strike_value = strike_int / 1000
+    strike_str = (
+        f"{strike_value:.2f}" if strike_int % 10 == 0 else f"{strike_value:.3f}"
+    )
+    return {
+        "underlying": root.upper(),
+        "option_type": "CALL" if match["type"].upper() == "C" else "PUT",
+        "strike": strike_str,
         "expiration": expiration,
     }
 
