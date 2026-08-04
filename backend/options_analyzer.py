@@ -39,7 +39,12 @@ import io
 import logging
 import math
 
-from csv_analyzer import _is_blank_csv_row, normalize_headers, sanitize_csv
+from csv_analyzer import (
+    _detect_broker_format,
+    _is_blank_csv_row,
+    normalize_headers,
+    sanitize_csv,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +246,11 @@ def analyze_uploaded_options(csv_data: str) -> dict:
 # ---------------------------------------------------------------------------
 # Broker format normalisation
 # ---------------------------------------------------------------------------
+
+
+def _detect_options_broker_format(csv_data: str) -> str | None:
+    """Return a broker name string if a known brokerage export is detected, else None."""
+    return _detect_broker_format(csv_data)
 
 
 def normalize_options_broker_format(csv_data: str) -> str:
