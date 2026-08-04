@@ -46,6 +46,7 @@ from datetime import datetime
 from csv_analyzer import (
     _detect_broker_format,
     _is_blank_csv_row,
+    _parse_mdy_date,
     normalize_headers,
     sanitize_csv,
 )
@@ -279,11 +280,8 @@ def _parse_robinhood_option_description(description: str) -> dict | None:
     match = _ROBINHOOD_OPTION_DESC_RE.match(description.strip())
     if not match:
         return None
-    try:
-        expiration = datetime.strptime(match["expiration"], "%m/%d/%Y").strftime(
-            "%Y-%m-%d"
-        )
-    except ValueError:
+    expiration = _parse_mdy_date(match["expiration"])
+    if expiration is None:
         return None
     return {
         "underlying": match["underlying"].upper(),
@@ -351,9 +349,8 @@ def _normalize_robinhood_options(csv_data: str) -> str:
         if trans_code not in _ROBINHOOD_OPTIONS_TRADE_CODES:
             continue
         raw_date = (row.get("Activity Date") or "").strip()
-        try:
-            date_val = datetime.strptime(raw_date, "%m/%d/%Y").strftime("%Y-%m-%d")
-        except ValueError:
+        date_val = _parse_mdy_date(raw_date)
+        if date_val is None:
             continue
         parsed_desc = _parse_robinhood_option_description(row.get("Description") or "")
         if parsed_desc is None:

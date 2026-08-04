@@ -291,6 +291,14 @@ def _detect_broker_format(csv_data: str) -> str | None:
     return None
 
 
+def _parse_mdy_date(raw_date: str) -> str | None:
+    """Convert an M/D/YYYY date string to YYYY-MM-DD; return None if invalid."""
+    try:
+        return datetime.strptime(raw_date.strip(), "%m/%d/%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
 def _normalize_robinhood(csv_data: str) -> str:
     """Convert a Robinhood CSV export to the standard detailed format.
 
@@ -306,9 +314,8 @@ def _normalize_robinhood(csv_data: str) -> str:
         if trans_code.upper() not in _ROBINHOOD_TRADE_CODES:
             continue
         raw_date = (row.get("Activity Date") or "").strip()
-        try:
-            date_val = datetime.strptime(raw_date, "%m/%d/%Y").strftime("%Y-%m-%d")
-        except ValueError:
+        date_val = _parse_mdy_date(raw_date)
+        if date_val is None:
             continue
         symbol = (row.get("Instrument") or "").strip()
         action = trans_code.upper()
