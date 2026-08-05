@@ -47,6 +47,7 @@ from csv_analyzer import (
     _detect_broker_format,
     _is_blank_csv_row,
     _parse_mdy_date,
+    _require_field,
     normalize_headers,
     sanitize_csv,
 )
@@ -134,6 +135,20 @@ def _parse_multiplier(value: str | None, row_num: int) -> int:
     if not stripped:
         return DEFAULT_CONTRACT_MULTIPLIER
     return _parse_positive_int(stripped, "multiplier", row_num)
+
+
+def _parse_premium(value: str | None, row_num: int) -> float:
+    """Parse premium, stripping '$' and ',' before validating as a non-negative float."""
+    cleaned = (
+        _require_field(value, row_num, "premium").replace("$", "").replace(",", "")
+    )
+    try:
+        result = float(cleaned)
+    except ValueError:
+        raise ValueError(f"Row {row_num}: premium '{value}' is not a number")
+    if math.isnan(result) or math.isinf(result) or result < 0:
+        raise ValueError(f"Row {row_num}: premium must be non-negative, got '{value}'")
+    return result
 
 
 # ---------------------------------------------------------------------------
