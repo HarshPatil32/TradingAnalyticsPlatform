@@ -55,7 +55,7 @@ class TestOptionsAnalyzerSkeleton:
 
     def test_valid_option_actions(self):
         assert options_analyzer.VALID_OPTION_ACTIONS == frozenset(
-            {"BTO", "STO", "BTC", "STC"}
+            {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
         )
 
     def test_schema_constants_are_frozensets(self):
@@ -79,7 +79,6 @@ class TestOptionsAnalyzerSkeleton:
     @pytest.mark.parametrize(
         "func_name",
         [
-            "normalize_options_broker_format",
             "parse_options_detailed",
             "parse_options_summary",
             "validate_options",

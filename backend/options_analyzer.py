@@ -10,12 +10,12 @@ Required columns (see REQUIRED_OPTIONS_COLUMNS):
     date          Trade date, YYYY-MM-DD.
     underlying    Ticker symbol of the underlying asset.
     option_type   One of VALID_OPTION_TYPES (CALL or PUT).
-    action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC).
+    action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC, OEXP, OASGN).
     strike        Positive float, strike price in USD per share.
     expiration    Option expiration date, YYYY-MM-DD (distinct from date).
     contracts     Positive integer, number of contracts.
-    premium       Positive float, quoted per share; total cash is
-                  premium * contracts * multiplier.
+    premium       Non-negative float, quoted per share; total cash is
+                  premium * contracts * multiplier. OEXP/OASGN rows use 0.
 
 Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
     multiplier    Positive integer; defaults to DEFAULT_CONTRACT_MULTIPLIER
@@ -28,8 +28,10 @@ Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
 
 Action vocabulary uses open/close semantics (BTO/STO/BTC/STC) rather than
 plain BUY/SELL so P&L pairing and risk checks can distinguish opening from
-closing legs. Broker-specific exports are normalised to this set by
-normalize_options_broker_format (later task).
+closing legs. OEXP and OASGN are passive-close events (expired worthless,
+assigned) with premium 0; side resolution for P&L pairing is handled later.
+Broker-specific exports are normalised to this set by
+normalize_options_broker_format.
 """
 
 from __future__ import annotations
@@ -38,8 +40,17 @@ import csv
 import io
 import logging
 import math
+import re
+from datetime import datetime
 
-from csv_analyzer import _is_blank_csv_row, normalize_headers, sanitize_csv
+from csv_analyzer import (
+    _detect_broker_format,
+    _is_blank_csv_row,
+    _parse_mdy_date,
+    _require_field,
+    normalize_headers,
+    sanitize_csv,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +93,9 @@ REQUIRED_OPTIONS_SUMMARY_COLUMNS: frozenset[str] = frozenset(
 VALID_OPTION_TYPES: frozenset[str] = frozenset({"CALL", "PUT"})
 
 # Open/close semantics required for P&L pairing and risk detection.
-VALID_OPTION_ACTIONS: frozenset[str] = frozenset({"BTO", "STO", "BTC", "STC"})
+VALID_OPTION_ACTIONS: frozenset[str] = frozenset(
+    {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
+)
 
 DEFAULT_CONTRACT_MULTIPLIER: int = 100
 
@@ -122,6 +135,20 @@ def _parse_multiplier(value: str | None, row_num: int) -> int:
     if not stripped:
         return DEFAULT_CONTRACT_MULTIPLIER
     return _parse_positive_int(stripped, "multiplier", row_num)
+
+
+def _parse_premium(value: str | None, row_num: int) -> float:
+    """Parse premium, stripping '$' and ',' before validating as a non-negative float."""
+    cleaned = (
+        _require_field(value, row_num, "premium").replace("$", "").replace(",", "")
+    )
+    try:
+        result = float(cleaned)
+    except ValueError:
+        raise ValueError(f"Row {row_num}: premium '{value}' is not a number")
+    if math.isnan(result) or math.isinf(result) or result < 0:
+        raise ValueError(f"Row {row_num}: premium must be non-negative, got '{value}'")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -240,10 +267,139 @@ def analyze_uploaded_options(csv_data: str) -> dict:
 
 # ---------------------------------------------------------------------------
 # Broker format normalisation
+# Shared symbol decoders (_parse_robinhood_option_description, _parse_occ_option_symbol)
+# are broker-agnostic; future broker normalizers should reuse them instead of re-parsing.
 # ---------------------------------------------------------------------------
 
 
+def _detect_options_broker_format(csv_data: str) -> str | None:
+    """Return a broker name string if a known brokerage export is detected, else None."""
+    return _detect_broker_format(csv_data)
+
+
+# Trans Code values that represent actual options trades (not dividends, transfers, etc.)
+_ROBINHOOD_OPTIONS_TRADE_CODES: frozenset[str] = frozenset(
+    {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
+)
+
+_ROBINHOOD_OPTION_DESC_RE = re.compile(
+    r"^(?P<underlying>[A-Za-z0-9.\-]+)\s+"
+    r"(?P<expiration>\d{1,2}/\d{1,2}/\d{4})\s+"
+    r"(?P<option_type>Call|Put)\s+"
+    r"\$(?P<strike>[\d,]+(?:\.\d+)?)$",
+    re.IGNORECASE,
+)
+
+
+def _parse_robinhood_option_description(description: str) -> dict | None:
+    """Parse 'AAPL 1/19/2024 Call $185.00' into underlying/expiration/option_type/strike."""
+    match = _ROBINHOOD_OPTION_DESC_RE.match(description.strip())
+    if not match:
+        return None
+    expiration = _parse_mdy_date(match["expiration"])
+    if expiration is None:
+        return None
+    return {
+        "underlying": match["underlying"].upper(),
+        "option_type": match["option_type"].upper(),
+        "strike": match["strike"].replace(",", ""),
+        "expiration": expiration,
+    }
+
+
+_OCC_SUFFIX_LEN = 15  # 6 date + 1 type + 8 strike; must match _OCC_SUFFIX_RE
+_OCC_SUFFIX_RE = re.compile(
+    r"^(?P<date>\d{6})(?P<type>[CP])(?P<strike>\d{8})$",
+    re.IGNORECASE,
+)
+
+
+def _parse_occ_option_symbol(symbol: str) -> dict | None:
+    """Parse an OCC symbol (root + YYMMDD + C/P + 8-digit strike*1000)."""
+    stripped = symbol.strip()
+    if len(stripped) <= _OCC_SUFFIX_LEN:
+        return None
+    root = stripped[:-_OCC_SUFFIX_LEN].strip()
+    if not root:
+        return None
+    match = _OCC_SUFFIX_RE.match(stripped[-_OCC_SUFFIX_LEN:])
+    if not match:
+        return None
+    try:
+        # %y pivot: Python maps 00-68 -> 2000-2068, 69-99 -> 1969-1999
+        expiration = datetime.strptime(match["date"], "%y%m%d").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+    strike_int = int(match["strike"])
+    strike_value = strike_int / 1000
+    strike_str = (
+        f"{strike_value:.2f}" if strike_int % 10 == 0 else f"{strike_value:.3f}"
+    )
+    return {
+        "underlying": root.upper(),
+        "option_type": "CALL" if match["type"].upper() == "C" else "PUT",
+        "strike": strike_str,
+        "expiration": expiration,
+    }
+
+
+def _normalize_robinhood_options(csv_data: str) -> str:
+    """Convert a Robinhood options CSV export to the canonical detailed options format."""
+    reader = csv.DictReader(io.StringIO(csv_data))
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(
+        [
+            "date",
+            "underlying",
+            "option_type",
+            "action",
+            "strike",
+            "expiration",
+            "contracts",
+            "premium",
+        ]
+    )
+    for row in reader:
+        trans_code = (row.get("Trans Code") or "").strip().upper()
+        if trans_code not in _ROBINHOOD_OPTIONS_TRADE_CODES:
+            continue
+        raw_date = (row.get("Activity Date") or "").strip()
+        date_val = _parse_mdy_date(raw_date)
+        if date_val is None:
+            continue
+        parsed_desc = _parse_robinhood_option_description(row.get("Description") or "")
+        if parsed_desc is None:
+            continue
+        # Quantity is passed through as-is; positive-integer validation is in parse_options_detailed.
+        contracts = (row.get("Quantity") or "").strip()
+        raw_premium = (row.get("Price") or "").strip().lstrip("$").replace(",", "")
+        premium = raw_premium if raw_premium else "0"
+        writer.writerow(
+            [
+                date_val,
+                parsed_desc["underlying"],
+                parsed_desc["option_type"],
+                trans_code,
+                parsed_desc["strike"],
+                parsed_desc["expiration"],
+                contracts,
+                premium,
+            ]
+        )
+    return out.getvalue()
+
+
 def normalize_options_broker_format(csv_data: str) -> str:
-    """Detect and convert known broker export formats to the canonical options schema."""
-    # TODO:
-    raise NotImplementedError
+    """Detect and convert known broker export formats to the canonical options schema.
+
+    Returns the data unchanged if no known broker format is detected.
+    Currently supports: Robinhood.
+    """
+    broker = _detect_options_broker_format(csv_data)
+    if broker == "robinhood":
+        logger.info(
+            "Detected Robinhood options export; normalizing to canonical format"
+        )
+        return _normalize_robinhood_options(csv_data)
+    return csv_data
