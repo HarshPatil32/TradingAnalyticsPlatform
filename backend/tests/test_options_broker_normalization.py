@@ -105,6 +105,47 @@ class TestNormalizeOptionsBrokerFormat:
         assert len(result) == 1
         assert result[0]["action"] == "BTO"
 
+    def test_transfer_row_filtered_out(self):
+        csv_data = (
+            f"{ROBINHOOD_HEADER}\n"
+            "1/10/2024,1/10/2024,1/10/2024,,ACH Deposit,ACH,1,$0.00,$500.00\n"
+            "1/15/2024,1/15/2024,1/17/2024,,AAPL 1/19/2024 Call $185.00,"
+            "BTO,2,$4.30,($860.00)\n"
+        )
+        result = _parse_normalized(normalize_options_broker_format(csv_data))
+        assert len(result) == 1
+        assert result[0]["action"] == "BTO"
+
+    def test_cash_management_row_filtered_out(self):
+        csv_data = (
+            f"{ROBINHOOD_HEADER}\n"
+            "1/1/2024,1/1/2024,1/1/2024,,Interest Payment,INT,0,$0.00,$1.25\n"
+            "1/15/2024,1/15/2024,1/17/2024,,AAPL 1/19/2024 Call $185.00,"
+            "BTO,2,$4.30,($860.00)\n"
+        )
+        result = _parse_normalized(normalize_options_broker_format(csv_data))
+        assert len(result) == 1
+        assert result[0]["action"] == "BTO"
+
+    def test_all_non_option_rows_returns_empty(self):
+        csv_data = (
+            f"{ROBINHOOD_HEADER}\n"
+            "1/15/2024,1/15/2024,1/17/2024,AAPL,Apple Inc.,BUY,10,$185.00,($1850.00)\n"
+            "1/15/2024,1/15/2024,1/17/2024,AAPL,Apple Inc.,CDIV,0,$0.00,$5.00\n"
+            "1/10/2024,1/10/2024,1/10/2024,,ACH Deposit,ACH,1,$0.00,$500.00\n"
+        )
+        result = _parse_normalized(normalize_options_broker_format(csv_data))
+        assert result == []
+
+    def test_non_options_trans_code_filtered_despite_valid_description(self):
+        csv_data = (
+            f"{ROBINHOOD_HEADER}\n"
+            "1/15/2024,1/15/2024,1/17/2024,,AAPL 1/19/2024 Call $185.00,"
+            "ACH,2,$4.30,($860.00)\n"
+        )
+        result = _parse_normalized(normalize_options_broker_format(csv_data))
+        assert result == []
+
     def test_malformed_description_skipped(self):
         csv_data = (
             f"{ROBINHOOD_HEADER}\n"

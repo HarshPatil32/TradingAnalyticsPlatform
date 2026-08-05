@@ -277,6 +277,7 @@ def _detect_options_broker_format(csv_data: str) -> str | None:
     return _detect_broker_format(csv_data)
 
 
+# Trans Code values that represent actual options trades (not dividends, transfers, etc.)
 _ROBINHOOD_OPTIONS_TRADE_CODES: frozenset[str] = frozenset(
     {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
 )
