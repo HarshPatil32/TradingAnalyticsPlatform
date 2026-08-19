@@ -21,10 +21,10 @@ Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
     multiplier    Positive integer; defaults to DEFAULT_CONTRACT_MULTIPLIER
                   (100) when absent or blank.
     fees          Non-negative float (0.0 is valid), user-reported broker fees
-                  for the leg; defaults to 0.0 when absent or blank. Use a
-                  non-negative check when parsing, not a positive-only parser.
-                  Distinct from estimated costs computed by options_costs when
-                  this column is missing.
+                  for the leg; defaults to 0.0 when absent or blank. May include
+                  '$' or ',' like premium. Use a non-negative check when parsing,
+                  not a positive-only parser. Distinct from estimated costs
+                  computed by options_costs when this column is missing.
 
 Action vocabulary uses open/close semantics (BTO/STO/BTC/STC) rather than
 plain BUY/SELL so P&L pairing and risk checks can distinguish opening from
@@ -44,10 +44,15 @@ import re
 from datetime import datetime
 
 from csv_analyzer import (
+    _SYMBOL_RE,
     _detect_broker_format,
     _is_blank_csv_row,
+    _map_required_columns,
+    _parse_iso_date,
     _parse_mdy_date,
+    _parse_positive_float,
     _require_field,
+    _strip_row,
     normalize_headers,
     sanitize_csv,
 )
@@ -151,6 +156,20 @@ def _parse_premium(value: str | None, row_num: int) -> float:
     return result
 
 
+def _parse_fees(value: str | None, row_num: int) -> float:
+    """Parse optional fees; default to 0.0 when absent or blank."""
+    if value is None or not value.strip():
+        return 0.0
+    cleaned = value.strip().replace("$", "").replace(",", "")
+    try:
+        result = float(cleaned)
+    except ValueError:
+        raise ValueError(f"Row {row_num}: fees '{value}' is not a number")
+    if math.isnan(result) or math.isinf(result) or result < 0:
+        raise ValueError(f"Row {row_num}: fees must be non-negative, got '{value}'")
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -194,29 +213,100 @@ def detect_options_format(csv_data: str) -> str:
 
 
 def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
-    """Parse a detailed options trade-list CSV into a list of typed trade dicts.
-
-    If is_free_tier is True, enforce the free tier options row limit.
-    """
+    """Parse a detailed options trade-list CSV into a list of typed trade dicts."""
     reader = csv.DictReader(io.StringIO(csv_data))
 
     if reader.fieldnames is None:
         raise ValueError("CSV is empty or has no header row")
 
-    row_count = 0
-    for raw_row in reader:
+    col = _map_required_columns(
+        reader.fieldnames,
+        REQUIRED_OPTIONS_COLUMNS,
+        "Your options CSV is missing required columns:",
+        ". Please check your file headers.",
+    )
+    norm_to_original = {f.strip().lower(): f for f in reader.fieldnames}
+    multiplier_key = norm_to_original.get("multiplier")
+    fees_key = norm_to_original.get("fees")
+
+    trades: list[dict] = []
+    for row_num, raw_row in enumerate(reader, start=2):
         if _is_blank_csv_row(raw_row):
             continue
 
-        if is_free_tier and row_count >= FREE_TIER_OPTIONS_ROW_LIMIT:
+        if is_free_tier and len(trades) >= FREE_TIER_OPTIONS_ROW_LIMIT:
             raise OptionsFreeTierLimitExceeded(
                 f"Options row count exceeds the free tier limit of {FREE_TIER_OPTIONS_ROW_LIMIT}"
             )
 
-        row_count += 1
+        raw_row = _strip_row(raw_row)
 
-    # Full field parsing lands in EPIC 7.1.
-    raise NotImplementedError
+        date_val = _require_field(raw_row[col["date"]], row_num, "date")
+        _parse_iso_date(date_val, "date", row_num)
+
+        underlying_val = _require_field(
+            raw_row[col["underlying"]], row_num, "underlying"
+        ).upper()
+        if (
+            not _SYMBOL_RE.match(underlying_val)
+            or underlying_val.isdigit()
+            or underlying_val.endswith((".", "-"))
+        ):
+            raise ValueError(
+                f"Row {row_num}: underlying '{underlying_val}' contains invalid characters"
+            )
+
+        option_type_val = _require_field(
+            raw_row[col["option_type"]], row_num, "option_type"
+        ).upper()
+        if option_type_val not in VALID_OPTION_TYPES:
+            raise ValueError(
+                f"Row {row_num}: option_type '{option_type_val}' is not CALL or PUT"
+            )
+
+        action_val = _require_field(raw_row[col["action"]], row_num, "action").upper()
+        if action_val not in VALID_OPTION_ACTIONS:
+            raise ValueError(
+                f"Row {row_num}: action '{action_val}' is not one of "
+                f"{', '.join(sorted(VALID_OPTION_ACTIONS))}"
+            )
+
+        strike_val = _parse_positive_float(raw_row[col["strike"]], "strike", row_num)
+
+        expiration_val = _require_field(
+            raw_row[col["expiration"]], row_num, "expiration"
+        )
+        _parse_iso_date(expiration_val, "expiration", row_num)
+
+        contracts_val = _parse_positive_int(
+            _require_field(raw_row[col["contracts"]], row_num, "contracts"),
+            "contracts",
+            row_num,
+        )
+
+        premium_val = _parse_premium(raw_row[col["premium"]], row_num)
+
+        multiplier_val = _parse_multiplier(
+            raw_row.get(multiplier_key) if multiplier_key else None, row_num
+        )
+        fees_val = _parse_fees(raw_row.get(fees_key) if fees_key else None, row_num)
+
+        trades.append(
+            {
+                "date": date_val,
+                "underlying": underlying_val,
+                "option_type": option_type_val,
+                "action": action_val,
+                "strike": strike_val,
+                "expiration": expiration_val,
+                "contracts": contracts_val,
+                "premium": premium_val,
+                "multiplier": multiplier_val,
+                "fees": fees_val,
+            }
+        )
+
+    return trades
 
 
 def parse_options_summary(csv_data: str) -> dict:

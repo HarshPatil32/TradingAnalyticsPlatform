@@ -79,7 +79,6 @@ class TestOptionsAnalyzerSkeleton:
     @pytest.mark.parametrize(
         "func_name",
         [
-            "parse_options_detailed",
             "parse_options_summary",
             "validate_options",
             "calculate_options_pnl",
@@ -92,9 +91,7 @@ class TestOptionsAnalyzerSkeleton:
     def test_public_stubs_raise_not_implemented(self, func_name):
         func = getattr(options_analyzer, func_name)
         with pytest.raises(NotImplementedError):
-            if func_name == "parse_options_detailed":
-                func("date,underlying\n")
-            elif func_name in (
+            if func_name in (
                 "validate_options",
                 "check_theta_decay_risk",
                 "check_naked_selling_habit",
