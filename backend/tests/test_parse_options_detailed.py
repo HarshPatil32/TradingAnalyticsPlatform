@@ -62,6 +62,16 @@ class TestParseOptionsDetailedHappyPath:
         assert result[0]["option_type"] == "CALL"
         assert result[1]["option_type"] == "PUT"
 
+    def test_action_case_insensitive(self):
+        csv_data = (
+            _OPTIONS_HEADER
+            + "2024-01-15,AAPL,CALL,bto,185.50,2024-06-21,1,3.25\n"
+            + "2024-02-20,MSFT,PUT,Stc,400.00,2024-03-15,1,1.50\n"
+        )
+        result = parse_options_detailed(csv_data)
+        assert result[0]["action"] == "BTO"
+        assert result[1]["action"] == "STC"
+
     def test_option_type_and_action_values(self):
         result = parse_options_detailed(VALID_CSV)
         assert result[0]["option_type"] == "CALL"
@@ -174,6 +184,11 @@ class TestParseOptionsDetailedFieldValidation:
             _OPTIONS_HEADER + "2024-01-15,AAPL,CALL,HOLD,185.50,2024-06-21,1,3.25\n"
         )
         with pytest.raises(ValueError, match="action 'HOLD' is not one of"):
+            parse_options_detailed(csv_data)
+
+    def test_blank_action_raises(self):
+        csv_data = _OPTIONS_HEADER + "2024-01-15,AAPL,CALL,,185.50,2024-06-21,1,3.25\n"
+        with pytest.raises(ValueError, match="Row 2: action is blank"):
             parse_options_detailed(csv_data)
 
     def test_zero_strike_raises(self):

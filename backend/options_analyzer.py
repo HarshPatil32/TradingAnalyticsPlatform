@@ -368,9 +368,7 @@ def _detect_options_broker_format(csv_data: str) -> str | None:
 
 
 # Trans Code values that represent actual options trades (not dividends, transfers, etc.)
-_ROBINHOOD_OPTIONS_TRADE_CODES: frozenset[str] = frozenset(
-    {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
-)
+_ROBINHOOD_OPTIONS_TRADE_CODES = VALID_OPTION_ACTIONS
 
 _ROBINHOOD_OPTION_DESC_RE = re.compile(
     r"^(?P<underlying>[A-Za-z0-9.\-]+)\s+"
