@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,16 @@ DEFAULT_IMPLIED_VOL_TOLERANCE: float = (
 MIN_IMPLIED_VOL: float = 0.001  # Solver lower bound (0.1%)
 MAX_IMPLIED_VOL: float = 5.0  # Solver upper bound (500%)
 TRADING_DAYS_PER_YEAR: int = 252  # For converting annualized theta to per-day theta
+
+
+def _validate_positive(value: float, name: str) -> None:
+    if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be positive, got {value!r}")
+
+
+def _validate_non_negative(value: float, name: str) -> None:
+    if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be non-negative, got {value!r}")
 
 
 # Configuration dataclass
@@ -47,6 +58,10 @@ def black_scholes_price(
     dividend_yield: float = DEFAULT_DIVIDEND_YIELD,
 ) -> float:
     """Calculate the Black-Scholes-Merton theoretical price for a call or put option."""
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
+    _validate_positive(volatility, "volatility")
     raise NotImplementedError
 
 
@@ -61,6 +76,10 @@ def calculate_implied_volatility(
     config: GreeksConfig | None = None,
 ) -> float:
     """Solve for the implied volatility that reprices an option to its observed market price."""
+    _validate_non_negative(market_price, "market_price")
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
     raise NotImplementedError
 
 
@@ -74,6 +93,10 @@ def calculate_delta(
     dividend_yield: float = DEFAULT_DIVIDEND_YIELD,
 ) -> float:
     """Calculate delta: sensitivity of option price to a $1 change in the underlying."""
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
+    _validate_positive(volatility, "volatility")
     raise NotImplementedError
 
 
@@ -86,6 +109,10 @@ def calculate_gamma(
     dividend_yield: float = DEFAULT_DIVIDEND_YIELD,
 ) -> float:
     """Calculate gamma: sensitivity of delta to a $1 change in the underlying (same for calls and puts)."""
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
+    _validate_positive(volatility, "volatility")
     raise NotImplementedError
 
 
@@ -99,6 +126,10 @@ def calculate_theta(
     dividend_yield: float = DEFAULT_DIVIDEND_YIELD,
 ) -> float:
     """Calculate theta: sensitivity of option price to one day of time decay."""
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
+    _validate_positive(volatility, "volatility")
     raise NotImplementedError
 
 
@@ -111,6 +142,10 @@ def calculate_vega(
     dividend_yield: float = DEFAULT_DIVIDEND_YIELD,
 ) -> float:
     """Calculate vega: sensitivity of option price to a 1 percentage-point change in volatility (same for calls and puts)."""
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
+    _validate_positive(volatility, "volatility")
     raise NotImplementedError
 
 
@@ -124,6 +159,10 @@ def calculate_rho(
     dividend_yield: float = DEFAULT_DIVIDEND_YIELD,
 ) -> float:
     """Calculate rho: sensitivity of option price to a 1 percentage-point change in the risk-free rate."""
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
+    _validate_positive(volatility, "volatility")
     raise NotImplementedError
 
 
@@ -137,4 +176,8 @@ def calculate_greeks(
     dividend_yield: float = DEFAULT_DIVIDEND_YIELD,
 ) -> dict:
     """Master function — compute price and all five standard Greeks in a single dict."""
+    _validate_positive(spot, "spot")
+    _validate_positive(strike, "strike")
+    _validate_positive(time_to_expiry, "time_to_expiry")
+    _validate_positive(volatility, "volatility")
     raise NotImplementedError
