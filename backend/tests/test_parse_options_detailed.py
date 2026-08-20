@@ -52,6 +52,16 @@ class TestParseOptionsDetailedHappyPath:
         result = parse_options_detailed(csv_data)
         assert result[0]["underlying"] == "AAPL"
 
+    def test_option_type_case_insensitive(self):
+        csv_data = (
+            _OPTIONS_HEADER
+            + "2024-01-15,AAPL,call,BTO,185.50,2024-06-21,1,3.25\n"
+            + "2024-02-20,MSFT,Put,STC,400.00,2024-03-15,1,1.50\n"
+        )
+        result = parse_options_detailed(csv_data)
+        assert result[0]["option_type"] == "CALL"
+        assert result[1]["option_type"] == "PUT"
+
     def test_option_type_and_action_values(self):
         result = parse_options_detailed(VALID_CSV)
         assert result[0]["option_type"] == "CALL"
