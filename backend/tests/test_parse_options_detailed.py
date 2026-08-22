@@ -262,6 +262,37 @@ class TestParseOptionsDetailedFieldValidation:
         with pytest.raises(ValueError, match="Row 2: invalid expiration"):
             parse_options_detailed(csv_data)
 
+    def test_expiration_before_date_raises(self):
+        csv_data = (
+            _OPTIONS_HEADER + "2024-06-21,AAPL,CALL,BTO,185.50,2024-01-15,1,3.25\n"
+        )
+        with pytest.raises(
+            ValueError,
+            match="Row 2: expiration '2024-01-15' must not be before date '2024-06-21'",
+        ):
+            parse_options_detailed(csv_data)
+
+    def test_expiration_equal_to_date_is_valid(self):
+        csv_data = (
+            _OPTIONS_HEADER + "2024-06-21,AAPL,CALL,BTO,185.50,2024-06-21,1,3.25\n"
+        )
+        result = parse_options_detailed(csv_data)
+        assert result[0]["date"] == "2024-06-21"
+        assert result[0]["expiration"] == "2024-06-21"
+
+    def test_expiration_before_date_row_number_in_error_message(self):
+        csv_data = (
+            _OPTIONS_HEADER
+            + "2024-01-15,AAPL,CALL,BTO,185.50,2024-06-21,1,3.25\n"
+            + "2024-01-16,AAPL,CALL,BTO,185.50,2024-06-21,1,3.25\n"
+            + "2024-06-21,AAPL,CALL,BTO,185.50,2024-01-15,1,3.25\n"
+        )
+        with pytest.raises(
+            ValueError,
+            match="Row 4: expiration '2024-01-15' must not be before date '2024-06-21'",
+        ):
+            parse_options_detailed(csv_data)
+
     def test_row_number_in_error_message(self):
         csv_data = (
             _OPTIONS_HEADER

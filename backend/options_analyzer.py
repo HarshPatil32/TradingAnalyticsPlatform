@@ -12,7 +12,8 @@ Required columns (see REQUIRED_OPTIONS_COLUMNS):
     option_type   One of VALID_OPTION_TYPES (CALL or PUT).
     action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC, OEXP, OASGN).
     strike        Positive float, strike price in USD per share.
-    expiration    Option expiration date, YYYY-MM-DD (distinct from date).
+    expiration    Option expiration date, YYYY-MM-DD (distinct from date;
+                  must be on or after date).
     contracts     Positive integer, number of contracts.
     premium       Non-negative float, quoted per share; total cash is
                   premium * contracts * multiplier. OEXP/OASGN rows use 0.
@@ -242,7 +243,7 @@ def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dic
         raw_row = _strip_row(raw_row)
 
         date_val = _require_field(raw_row[col["date"]], row_num, "date")
-        _parse_iso_date(date_val, "date", row_num)
+        parsed_date = _parse_iso_date(date_val, "date", row_num)
 
         underlying_val = _require_field(
             raw_row[col["underlying"]], row_num, "underlying"
@@ -276,7 +277,12 @@ def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dic
         expiration_val = _require_field(
             raw_row[col["expiration"]], row_num, "expiration"
         )
-        _parse_iso_date(expiration_val, "expiration", row_num)
+        parsed_expiration = _parse_iso_date(expiration_val, "expiration", row_num)
+
+        if parsed_expiration < parsed_date:
+            raise ValueError(
+                f"Row {row_num}: expiration '{expiration_val}' must not be before date '{date_val}'"
+            )
 
         contracts_val = _parse_positive_int(
             _require_field(raw_row[col["contracts"]], row_num, "contracts"),
@@ -310,11 +316,7 @@ def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dic
 
 
 def parse_options_summary(csv_data: str) -> dict:
-    """Parse a summary-format options CSV into a single dict of aggregate metrics.
-
-    Expects headers matching REQUIRED_OPTIONS_SUMMARY_COLUMNS (currently the same
-    keys as stock summary uploads; revisit if the options summary schema changes).
-    """
+    """Parse a summary-format options CSV into a single dict of aggregate metrics."""
     # TODO:
     raise NotImplementedError
 
