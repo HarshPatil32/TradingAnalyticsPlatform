@@ -248,10 +248,12 @@ def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dic
         underlying_val = _require_field(
             raw_row[col["underlying"]], row_num, "underlying"
         ).upper()
+        # Disallow all-digit, trailing dot/hyphen, or any space
         if (
             not _SYMBOL_RE.match(underlying_val)
             or underlying_val.isdigit()
             or underlying_val.endswith((".", "-"))
+            or " " in underlying_val
         ):
             raise ValueError(
                 f"Row {row_num}: underlying '{underlying_val}' contains invalid characters"

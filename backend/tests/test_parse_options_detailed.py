@@ -248,6 +248,34 @@ class TestParseOptionsDetailedFieldValidation:
         with pytest.raises(ValueError, match="underlying 'AA PL' contains invalid"):
             parse_options_detailed(csv_data)
 
+    def test_invalid_underlying_trailing_dot_raises(self):
+        csv_data = (
+            _OPTIONS_HEADER + "2024-01-15,AAPL.,CALL,BTO,185.50,2024-06-21,1,3.25\n"
+        )
+        with pytest.raises(ValueError, match="underlying 'AAPL\\.' contains invalid"):
+            parse_options_detailed(csv_data)
+
+    def test_invalid_underlying_trailing_hyphen_raises(self):
+        csv_data = (
+            _OPTIONS_HEADER + "2024-01-15,AAPL-,CALL,BTO,185.50,2024-06-21,1,3.25\n"
+        )
+        with pytest.raises(ValueError, match="underlying 'AAPL-' contains invalid"):
+            parse_options_detailed(csv_data)
+
+    def test_underlying_embedded_hyphen_valid(self):
+        csv_data = (
+            _OPTIONS_HEADER + "2024-01-15,BRK-B,CALL,BTO,185.50,2024-06-21,1,3.25\n"
+        )
+        result = parse_options_detailed(csv_data)
+        assert result[0]["underlying"] == "BRK-B"
+
+    def test_underlying_embedded_dot_valid(self):
+        csv_data = (
+            _OPTIONS_HEADER + "2024-01-15,BF.B,CALL,BTO,185.50,2024-06-21,1,3.25\n"
+        )
+        result = parse_options_detailed(csv_data)
+        assert result[0]["underlying"] == "BF.B"
+
     def test_invalid_date_format_raises(self):
         csv_data = (
             _OPTIONS_HEADER + "01/15/2024,AAPL,CALL,BTO,185.50,2024-06-21,1,3.25\n"
