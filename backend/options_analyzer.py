@@ -422,7 +422,28 @@ def validate_options(trades: list[dict]) -> list[dict]:
                     }
                 )
             else:
-                open_legs[pos_key].pop(0)
+                matched_open = open_legs[pos_key].pop(0)
+                if action in {"OEXP", "OASGN"}:
+                    open_date = matched_open.get("date") or "unknown date"
+                    close_date = trade.get("date") or "unknown date"
+                    label = _position_label(trade)
+                    underlying, option_type, strike, expiration = pos_key
+                    warnings.append(
+                        {
+                            "type": "expired_position",
+                            "level": "info",
+                            "message": (
+                                f"Expired: {label} (opened {open_date}, expired {close_date})"
+                            ),
+                            "underlying": underlying,
+                            "option_type": option_type,
+                            "strike": strike,
+                            "expiration": expiration,
+                            "open_date": open_date,
+                            "date": close_date,
+                            "action": action,
+                        }
+                    )
 
     for pos_key, legs in open_legs.items():
         for leg in legs:

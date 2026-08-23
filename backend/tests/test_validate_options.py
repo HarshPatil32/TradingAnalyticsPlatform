@@ -112,6 +112,64 @@ class TestValidateOptionsUnclosedPosition:
         assert "no matching close yet" in unclosed[0]["message"]
 
 
+class TestValidateOptionsExpiredPosition:
+    @pytest.mark.parametrize(
+        "open_action,close_action",
+        [
+            ("BTO", "OEXP"),
+            ("STO", "OASGN"),
+            ("BTO", "OASGN"),
+            ("STO", "OEXP"),
+        ],
+    )
+    def test_passive_close_emits_info(self, open_action, close_action):
+        open_trade = _opt(action=open_action, date="2024-01-01", premium=2.5)
+        close_trade = _opt(action=close_action, date="2024-01-19", premium=0.0)
+        warnings = validate_options([open_trade, close_trade])
+        expired = [w for w in warnings if w["type"] == "expired_position"]
+        assert len(expired) == 1
+        notice = expired[0]
+        assert notice["level"] == "info"
+        assert notice["action"] == close_action
+        assert notice["underlying"] == "AAPL"
+        assert notice["option_type"] == "CALL"
+        assert notice["strike"] == 185.0
+        assert notice["expiration"] == "2024-01-19"
+        assert notice["open_date"] == "2024-01-01"
+        assert notice["date"] == "2024-01-19"
+        assert "Expired:" in notice["message"]
+        assert "2024-01-01" in notice["message"]
+        assert "2024-01-19" in notice["message"]
+
+    def test_normal_close_does_not_emit_expired_position(self):
+        open_trade = _opt(action="BTO", date="2024-01-01")
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=3.0)
+        warnings = validate_options([open_trade, close_trade])
+        assert not any(w["type"] == "expired_position" for w in warnings)
+
+    def test_passive_close_without_open_does_not_emit_expired_position(self):
+        trade = _opt(action="OEXP", date="2024-01-19", premium=0.0)
+        warnings = validate_options([trade])
+        assert not any(w["type"] == "expired_position" for w in warnings)
+        assert any(w["type"] == "unmatched_close" for w in warnings)
+
+    def test_one_expired_and_one_unclosed(self):
+        open_expired = _opt(action="BTO", date="2024-01-01", strike=185.0)
+        close_expired = _opt(
+            action="OEXP", date="2024-01-19", strike=185.0, premium=0.0
+        )
+        open_unclosed = _opt(
+            action="BTO", date="2024-01-02", strike=190.0, expiration="2024-02-16"
+        )
+        warnings = validate_options([open_expired, close_expired, open_unclosed])
+        expired = [w for w in warnings if w["type"] == "expired_position"]
+        unclosed = [w for w in warnings if w["type"] == "unclosed_position"]
+        assert len(expired) == 1
+        assert expired[0]["strike"] == 185.0
+        assert len(unclosed) == 1
+        assert unclosed[0]["strike"] == 190.0
+
+
 class TestValidateOptionsInvalidValues:
     def test_invalid_contracts(self):
         trade = _opt(contracts=0)
