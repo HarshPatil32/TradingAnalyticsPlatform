@@ -170,6 +170,59 @@ class TestValidateOptionsExpiredPosition:
         assert unclosed[0]["strike"] == 190.0
 
 
+class TestValidateOptionsNakedShort:
+    def test_sto_alone_emits_naked_short(self):
+        trade = _opt(action="STO", premium=1.5)
+        warnings = [w for w in validate_options([trade]) if w["type"] == "naked_short"]
+        assert len(warnings) == 1
+        assert warnings[0]["level"] == "warning"
+
+    def test_sto_with_matching_bto_no_warning(self):
+        bto = _opt(action="BTO", date="2024-01-01")
+        sto = _opt(action="STO", date="2024-01-02", premium=1.5)
+        warnings = validate_options([bto, sto])
+        assert not any(w["type"] == "naked_short" for w in warnings)
+
+    def test_closed_sto_no_naked_short(self):
+        open_trade = _opt(action="STO", date="2024-01-01", premium=1.5)
+        close_trade = _opt(action="STC", date="2024-01-10", premium=0.5)
+        warnings = validate_options([open_trade, close_trade])
+        assert not any(w["type"] == "naked_short" for w in warnings)
+
+    def test_sto_different_strike_from_bto_warns(self):
+        bto = _opt(action="BTO", strike=180.0)
+        sto = _opt(action="STO", strike=185.0, premium=1.5)
+        warnings = [
+            w for w in validate_options([bto, sto]) if w["type"] == "naked_short"
+        ]
+        assert len(warnings) == 1
+
+    def test_bto_alone_no_naked_short(self):
+        trade = _opt(action="BTO")
+        warnings = validate_options([trade])
+        assert not any(w["type"] == "naked_short" for w in warnings)
+
+    def test_multiple_sto_one_covered_one_naked(self):
+        bto = _opt(action="BTO", strike=185.0)
+        covered_sto = _opt(action="STO", strike=185.0, premium=1.5)
+        naked_sto = _opt(action="STO", strike=190.0, premium=2.0)
+        warnings = [
+            w
+            for w in validate_options([bto, covered_sto, naked_sto])
+            if w["type"] == "naked_short"
+        ]
+        assert len(warnings) == 1
+        assert "190.0" in warnings[0]["message"]
+
+    def test_naked_short_message_contains_label(self):
+        trade = _opt(action="STO", premium=1.5)
+        warnings = [w for w in validate_options([trade]) if w["type"] == "naked_short"]
+        assert len(warnings) == 1
+        assert "AAPL" in warnings[0]["message"]
+        assert "STO" in warnings[0]["message"]
+        assert "no offsetting long position" in warnings[0]["message"]
+
+
 class TestValidateOptionsInvalidValues:
     def test_invalid_contracts(self):
         trade = _opt(contracts=0)

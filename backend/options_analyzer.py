@@ -465,6 +465,28 @@ def validate_options(trades: list[dict]) -> list[dict]:
                 }
             )
 
+    bto_keys: set[tuple] = {
+        _position_key(t)
+        for t in trades
+        if _normalize_option_action(t.get("action")) == "BTO"
+    }
+    for pos_key, legs in open_legs.items():
+        for leg in legs:
+            if _normalize_option_action(leg.get("action")) != "STO":
+                continue
+            if pos_key not in bto_keys:
+                date = leg.get("date") or "unknown date"
+                label = _position_label(leg)
+                warnings.append(
+                    {
+                        "type": "naked_short",
+                        "level": "warning",
+                        "message": (
+                            f"Naked short: STO {label} on {date} has no offsetting long position"
+                        ),
+                    }
+                )
+
     for idx, trade in enumerate(trades):
         label = _position_label(trade)
         row_num = idx + 1
