@@ -57,6 +57,9 @@ from csv_analyzer import (
     normalize_headers,
     sanitize_csv,
 )
+from csv_analyzer import (
+    parse_summary as _parse_stock_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -319,8 +322,7 @@ def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dic
 
 def parse_options_summary(csv_data: str) -> dict:
     """Parse a summary-format options CSV into a single dict of aggregate metrics."""
-    # TODO:
-    raise NotImplementedError
+    return _parse_stock_summary(csv_data)
 
 
 def validate_options(trades: list[dict]) -> list[dict]:

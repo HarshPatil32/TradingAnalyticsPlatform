@@ -3,6 +3,7 @@
 import pytest
 
 import options_analyzer
+from csv_analyzer import REQUIRED_SUMMARY_KEYS
 
 
 class TestOptionsAnalyzerSkeleton:
@@ -45,6 +46,11 @@ class TestOptionsAnalyzerSkeleton:
             }
         )
 
+    def test_options_summary_columns_match_stock_summary_keys(self):
+        assert (
+            options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS == REQUIRED_SUMMARY_KEYS
+        )
+
     def test_summary_columns_disjoint_from_required(self):
         assert options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS.isdisjoint(
             options_analyzer.REQUIRED_OPTIONS_COLUMNS
@@ -79,7 +85,6 @@ class TestOptionsAnalyzerSkeleton:
     @pytest.mark.parametrize(
         "func_name",
         [
-            "parse_options_summary",
             "validate_options",
             "calculate_options_pnl",
             "check_theta_decay_risk",
