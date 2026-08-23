@@ -64,6 +64,12 @@ class TestOptionsAnalyzerSkeleton:
             {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
         )
 
+    def test_open_and_close_actions_partition_valid_actions(self):
+        open_actions = options_analyzer._OPEN_OPTION_ACTIONS
+        close_actions = options_analyzer._CLOSE_OPTION_ACTIONS
+        assert open_actions.isdisjoint(close_actions)
+        assert open_actions | close_actions == options_analyzer.VALID_OPTION_ACTIONS
+
     def test_schema_constants_are_frozensets(self):
         for name in (
             "REQUIRED_OPTIONS_COLUMNS",
@@ -85,7 +91,6 @@ class TestOptionsAnalyzerSkeleton:
     @pytest.mark.parametrize(
         "func_name",
         [
-            "validate_options",
             "calculate_options_pnl",
             "check_theta_decay_risk",
             "check_expired_worthless_pattern",
@@ -97,7 +102,6 @@ class TestOptionsAnalyzerSkeleton:
         func = getattr(options_analyzer, func_name)
         with pytest.raises(NotImplementedError):
             if func_name in (
-                "validate_options",
                 "check_theta_decay_risk",
                 "check_naked_selling_habit",
             ):

@@ -174,6 +174,30 @@ def _parse_fees(value: str | None, row_num: int) -> float:
     return result
 
 
+def _is_invalid_positive(val: object) -> bool:
+    try:
+        result = float(val)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+    return math.isnan(result) or math.isinf(result) or result <= 0
+
+
+def _is_invalid_positive_int(val: object) -> bool:
+    try:
+        result = float(val)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+    return math.isnan(result) or math.isinf(result) or result <= 0 or result % 1 != 0
+
+
+def _is_invalid_non_negative(val: object) -> bool:
+    try:
+        result = float(val)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+    return math.isnan(result) or math.isinf(result) or result < 0
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -325,10 +349,181 @@ def parse_options_summary(csv_data: str) -> dict:
     return _parse_stock_summary(csv_data)
 
 
+def _normalize_option_action(action: object) -> str:
+    return str(action).strip().upper() if action is not None else ""
+
+
+def _position_key(trade: dict) -> tuple:
+    underlying = str(trade.get("underlying") or "").strip().upper()
+    option_type = str(trade.get("option_type") or "").strip().upper()
+    strike = trade.get("strike")
+    expiration = str(trade.get("expiration") or "").strip()
+    return (underlying, option_type, strike, expiration)
+
+
+def _position_label(trade: dict) -> str:
+    underlying = str(trade.get("underlying") or "").strip().upper()
+    option_type = str(trade.get("option_type") or "").strip().upper()
+    strike = trade.get("strike")
+    expiration = str(trade.get("expiration") or "").strip()
+    return f"{underlying} {option_type} strike {strike} exp {expiration}"
+
+
+_OPEN_OPTION_ACTIONS = frozenset({"BTO", "STO"})
+_CLOSE_OPTION_ACTIONS = frozenset({"BTC", "STC", "OEXP", "OASGN"})
+
+
 def validate_options(trades: list[dict]) -> list[dict]:
     """Check options trades for pairing errors and data quality issues."""
-    # TODO:
-    raise NotImplementedError
+    warnings: list[dict] = []
+
+    seen: dict[tuple, int] = {}
+    for trade in trades:
+        action = _normalize_option_action(trade.get("action"))
+        underlying = str(trade.get("underlying") or "").strip().upper()
+        option_type = str(trade.get("option_type") or "").strip().upper()
+        date = str(trade.get("date") or "").strip()
+        strike = trade.get("strike")
+        expiration = str(trade.get("expiration") or "").strip()
+        key = (date, underlying, option_type, action, strike, expiration)
+        seen[key] = seen.get(key, 0) + 1
+
+    for key, count in seen.items():
+        if count > 1:
+            date, underlying, option_type, action, strike, expiration = key
+            warnings.append(
+                {
+                    "type": "duplicate",
+                    "level": "warning",
+                    "message": (
+                        f"Duplicate trade: {action} {underlying} {option_type} "
+                        f"{strike} exp {expiration} on {date} appears {count} times"
+                    ),
+                }
+            )
+
+    open_legs: dict[tuple, list[dict]] = {}
+    for trade in trades:
+        action = _normalize_option_action(trade.get("action"))
+        pos_key = _position_key(trade)
+        if action in _OPEN_OPTION_ACTIONS:
+            open_legs.setdefault(pos_key, []).append(trade)
+        elif action in _CLOSE_OPTION_ACTIONS:
+            if not open_legs.get(pos_key):
+                date = trade.get("date") or "unknown date"
+                label = _position_label(trade)
+                warnings.append(
+                    {
+                        "type": "unmatched_close",
+                        "level": "warning",
+                        "message": (
+                            f"{action} for {label} on {date} has no preceding open"
+                        ),
+                    }
+                )
+            else:
+                open_legs[pos_key].pop(0)
+
+    for pos_key, legs in open_legs.items():
+        for leg in legs:
+            date = leg.get("date") or "unknown date"
+            label = _position_label(leg)
+            underlying, option_type, strike, expiration = pos_key
+            warnings.append(
+                {
+                    "type": "unclosed_position",
+                    "level": "info",
+                    "message": (
+                        f"Open position: {label} opened on {date} (no matching close yet)"
+                    ),
+                    "underlying": underlying,
+                    "option_type": option_type,
+                    "strike": strike,
+                    "expiration": expiration,
+                    "date": date,
+                }
+            )
+
+    for idx, trade in enumerate(trades):
+        label = _position_label(trade)
+        row_num = idx + 1
+        action = _normalize_option_action(trade.get("action"))
+
+        if _is_invalid_positive_int(trade.get("contracts")):
+            warnings.append(
+                {
+                    "type": "invalid_contracts",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid contracts: "
+                        f"{trade.get('contracts')}"
+                    ),
+                }
+            )
+
+        premium = trade.get("premium")
+        if _is_invalid_non_negative(premium):
+            warnings.append(
+                {
+                    "type": "invalid_premium",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid premium: {premium}"
+                    ),
+                }
+            )
+        elif (
+            action in {"OEXP", "OASGN"}
+            and isinstance(premium, (int, float))
+            and premium != 0
+        ):
+            warnings.append(
+                {
+                    "type": "invalid_premium",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} {action} should have premium 0, "
+                        f"got {premium}"
+                    ),
+                }
+            )
+
+        if _is_invalid_positive(trade.get("strike")):
+            warnings.append(
+                {
+                    "type": "invalid_strike",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid strike: "
+                        f"{trade.get('strike')}"
+                    ),
+                }
+            )
+
+        if _is_invalid_positive_int(trade.get("multiplier")):
+            warnings.append(
+                {
+                    "type": "invalid_multiplier",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid multiplier: "
+                        f"{trade.get('multiplier')}"
+                    ),
+                }
+            )
+
+        if _is_invalid_non_negative(trade.get("fees")):
+            warnings.append(
+                {
+                    "type": "invalid_fees",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid fees: {trade.get('fees')}"
+                    ),
+                }
+            )
+
+    return warnings
 
 
 def calculate_options_pnl(trades: list[dict]) -> dict:
