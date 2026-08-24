@@ -12,7 +12,8 @@ Required columns (see REQUIRED_OPTIONS_COLUMNS):
     option_type   One of VALID_OPTION_TYPES (CALL or PUT).
     action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC, OEXP, OASGN).
     strike        Positive float, strike price in USD per share.
-    expiration    Option expiration date, YYYY-MM-DD (distinct from date).
+    expiration    Option expiration date, YYYY-MM-DD (distinct from date;
+                  must be on or after date).
     contracts     Positive integer, number of contracts.
     premium       Non-negative float, quoted per share; total cash is
                   premium * contracts * multiplier. OEXP/OASGN rows use 0.
@@ -21,10 +22,10 @@ Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
     multiplier    Positive integer; defaults to DEFAULT_CONTRACT_MULTIPLIER
                   (100) when absent or blank.
     fees          Non-negative float (0.0 is valid), user-reported broker fees
-                  for the leg; defaults to 0.0 when absent or blank. Use a
-                  non-negative check when parsing, not a positive-only parser.
-                  Distinct from estimated costs computed by options_costs when
-                  this column is missing.
+                  for the leg; defaults to 0.0 when absent or blank. May include
+                  '$' or ',' like premium. Use a non-negative check when parsing,
+                  not a positive-only parser. Distinct from estimated costs
+                  computed by options_costs when this column is missing.
 
 Action vocabulary uses open/close semantics (BTO/STO/BTC/STC) rather than
 plain BUY/SELL so P&L pairing and risk checks can distinguish opening from
@@ -44,12 +45,20 @@ import re
 from datetime import datetime
 
 from csv_analyzer import (
+    _SYMBOL_RE,
     _detect_broker_format,
     _is_blank_csv_row,
+    _map_required_columns,
+    _parse_iso_date,
     _parse_mdy_date,
+    _parse_positive_float,
     _require_field,
+    _strip_row,
     normalize_headers,
     sanitize_csv,
+)
+from csv_analyzer import (
+    parse_summary as _parse_stock_summary,
 )
 
 logger = logging.getLogger(__name__)
@@ -151,6 +160,44 @@ def _parse_premium(value: str | None, row_num: int) -> float:
     return result
 
 
+def _parse_fees(value: str | None, row_num: int) -> float:
+    """Parse optional fees; default to 0.0 when absent or blank."""
+    if value is None or not value.strip():
+        return 0.0
+    cleaned = value.strip().replace("$", "").replace(",", "")
+    try:
+        result = float(cleaned)
+    except ValueError:
+        raise ValueError(f"Row {row_num}: fees '{value}' is not a number")
+    if math.isnan(result) or math.isinf(result) or result < 0:
+        raise ValueError(f"Row {row_num}: fees must be non-negative, got '{value}'")
+    return result
+
+
+def _is_invalid_positive(val: object) -> bool:
+    try:
+        result = float(val)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+    return math.isnan(result) or math.isinf(result) or result <= 0
+
+
+def _is_invalid_positive_int(val: object) -> bool:
+    try:
+        result = float(val)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+    return math.isnan(result) or math.isinf(result) or result <= 0 or result % 1 != 0
+
+
+def _is_invalid_non_negative(val: object) -> bool:
+    try:
+        result = float(val)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return True
+    return math.isnan(result) or math.isinf(result) or result < 0
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -194,45 +241,332 @@ def detect_options_format(csv_data: str) -> str:
 
 
 def parse_options_detailed(csv_data: str, is_free_tier: bool = True) -> list[dict]:
-    """Parse a detailed options trade-list CSV into a list of typed trade dicts.
-
-    If is_free_tier is True, enforce the free tier options row limit.
-    """
+    """Parse a detailed options trade-list CSV into a list of typed trade dicts."""
     reader = csv.DictReader(io.StringIO(csv_data))
 
     if reader.fieldnames is None:
         raise ValueError("CSV is empty or has no header row")
 
-    row_count = 0
-    for raw_row in reader:
+    col = _map_required_columns(
+        reader.fieldnames,
+        REQUIRED_OPTIONS_COLUMNS,
+        "Your options CSV is missing required columns:",
+        ". Please check your file headers.",
+    )
+    norm_to_original = {f.strip().lower(): f for f in reader.fieldnames}
+    multiplier_key = norm_to_original.get("multiplier")
+    fees_key = norm_to_original.get("fees")
+
+    trades: list[dict] = []
+    for row_num, raw_row in enumerate(reader, start=2):
         if _is_blank_csv_row(raw_row):
             continue
 
-        if is_free_tier and row_count >= FREE_TIER_OPTIONS_ROW_LIMIT:
+        if is_free_tier and len(trades) >= FREE_TIER_OPTIONS_ROW_LIMIT:
             raise OptionsFreeTierLimitExceeded(
                 f"Options row count exceeds the free tier limit of {FREE_TIER_OPTIONS_ROW_LIMIT}"
             )
 
-        row_count += 1
+        raw_row = _strip_row(raw_row)
 
-    # Full field parsing lands in EPIC 7.1.
-    raise NotImplementedError
+        date_val = _require_field(raw_row[col["date"]], row_num, "date")
+        parsed_date = _parse_iso_date(date_val, "date", row_num)
+
+        underlying_val = _require_field(
+            raw_row[col["underlying"]], row_num, "underlying"
+        ).upper()
+        # Disallow all-digit, trailing dot/hyphen, or any space
+        if (
+            not _SYMBOL_RE.match(underlying_val)
+            or underlying_val.isdigit()
+            or underlying_val.endswith((".", "-"))
+            or " " in underlying_val
+        ):
+            raise ValueError(
+                f"Row {row_num}: underlying '{underlying_val}' contains invalid characters"
+            )
+
+        option_type_val = _require_field(
+            raw_row[col["option_type"]], row_num, "option_type"
+        ).upper()
+        if option_type_val not in VALID_OPTION_TYPES:
+            raise ValueError(
+                f"Row {row_num}: option_type '{option_type_val}' is not CALL or PUT"
+            )
+
+        action_val = _require_field(raw_row[col["action"]], row_num, "action").upper()
+        if action_val not in VALID_OPTION_ACTIONS:
+            raise ValueError(
+                f"Row {row_num}: action '{action_val}' is not one of "
+                f"{', '.join(sorted(VALID_OPTION_ACTIONS))}"
+            )
+
+        strike_val = _parse_positive_float(raw_row[col["strike"]], "strike", row_num)
+
+        expiration_val = _require_field(
+            raw_row[col["expiration"]], row_num, "expiration"
+        )
+        parsed_expiration = _parse_iso_date(expiration_val, "expiration", row_num)
+
+        if parsed_expiration < parsed_date:
+            raise ValueError(
+                f"Row {row_num}: expiration '{expiration_val}' must not be before date '{date_val}'"
+            )
+
+        contracts_val = _parse_positive_int(
+            _require_field(raw_row[col["contracts"]], row_num, "contracts"),
+            "contracts",
+            row_num,
+        )
+
+        premium_val = _parse_premium(raw_row[col["premium"]], row_num)
+
+        multiplier_val = _parse_multiplier(
+            raw_row.get(multiplier_key) if multiplier_key else None, row_num
+        )
+        fees_val = _parse_fees(raw_row.get(fees_key) if fees_key else None, row_num)
+
+        trades.append(
+            {
+                "date": date_val,
+                "underlying": underlying_val,
+                "option_type": option_type_val,
+                "action": action_val,
+                "strike": strike_val,
+                "expiration": expiration_val,
+                "contracts": contracts_val,
+                "premium": premium_val,
+                "multiplier": multiplier_val,
+                "fees": fees_val,
+            }
+        )
+
+    return trades
 
 
 def parse_options_summary(csv_data: str) -> dict:
-    """Parse a summary-format options CSV into a single dict of aggregate metrics.
+    """Parse a summary-format options CSV into a single dict of aggregate metrics."""
+    return _parse_stock_summary(csv_data)
 
-    Expects headers matching REQUIRED_OPTIONS_SUMMARY_COLUMNS (currently the same
-    keys as stock summary uploads; revisit if the options summary schema changes).
-    """
-    # TODO:
-    raise NotImplementedError
+
+def _normalize_option_action(action: object) -> str:
+    return str(action).strip().upper() if action is not None else ""
+
+
+def _position_key(trade: dict) -> tuple:
+    underlying = str(trade.get("underlying") or "").strip().upper()
+    option_type = str(trade.get("option_type") or "").strip().upper()
+    strike = trade.get("strike")
+    expiration = str(trade.get("expiration") or "").strip()
+    return (underlying, option_type, strike, expiration)
+
+
+def _position_label(trade: dict) -> str:
+    underlying = str(trade.get("underlying") or "").strip().upper()
+    option_type = str(trade.get("option_type") or "").strip().upper()
+    strike = trade.get("strike")
+    expiration = str(trade.get("expiration") or "").strip()
+    return f"{underlying} {option_type} strike {strike} exp {expiration}"
+
+
+_OPEN_OPTION_ACTIONS = frozenset({"BTO", "STO"})
+_CLOSE_OPTION_ACTIONS = frozenset({"BTC", "STC", "OEXP", "OASGN"})
 
 
 def validate_options(trades: list[dict]) -> list[dict]:
     """Check options trades for pairing errors and data quality issues."""
-    # TODO:
-    raise NotImplementedError
+    warnings: list[dict] = []
+
+    seen: dict[tuple, int] = {}
+    for trade in trades:
+        action = _normalize_option_action(trade.get("action"))
+        underlying = str(trade.get("underlying") or "").strip().upper()
+        option_type = str(trade.get("option_type") or "").strip().upper()
+        date = str(trade.get("date") or "").strip()
+        strike = trade.get("strike")
+        expiration = str(trade.get("expiration") or "").strip()
+        key = (date, underlying, option_type, action, strike, expiration)
+        seen[key] = seen.get(key, 0) + 1
+
+    for key, count in seen.items():
+        if count > 1:
+            date, underlying, option_type, action, strike, expiration = key
+            warnings.append(
+                {
+                    "type": "duplicate",
+                    "level": "warning",
+                    "message": (
+                        f"Duplicate trade: {action} {underlying} {option_type} "
+                        f"{strike} exp {expiration} on {date} appears {count} times"
+                    ),
+                }
+            )
+
+    open_legs: dict[tuple, list[dict]] = {}
+    for trade in trades:
+        action = _normalize_option_action(trade.get("action"))
+        pos_key = _position_key(trade)
+        if action in _OPEN_OPTION_ACTIONS:
+            open_legs.setdefault(pos_key, []).append(trade)
+        elif action in _CLOSE_OPTION_ACTIONS:
+            if not open_legs.get(pos_key):
+                date = trade.get("date") or "unknown date"
+                label = _position_label(trade)
+                warnings.append(
+                    {
+                        "type": "unmatched_close",
+                        "level": "warning",
+                        "message": (
+                            f"{action} for {label} on {date} has no preceding open"
+                        ),
+                    }
+                )
+            else:
+                matched_open = open_legs[pos_key].pop(0)
+                if action in {"OEXP", "OASGN"}:
+                    open_date = matched_open.get("date") or "unknown date"
+                    close_date = trade.get("date") or "unknown date"
+                    label = _position_label(trade)
+                    underlying, option_type, strike, expiration = pos_key
+                    warnings.append(
+                        {
+                            "type": "expired_position",
+                            "level": "info",
+                            "message": (
+                                f"Expired: {label} (opened {open_date}, expired {close_date})"
+                            ),
+                            "underlying": underlying,
+                            "option_type": option_type,
+                            "strike": strike,
+                            "expiration": expiration,
+                            "open_date": open_date,
+                            "date": close_date,
+                            "action": action,
+                        }
+                    )
+
+    for pos_key, legs in open_legs.items():
+        for leg in legs:
+            date = leg.get("date") or "unknown date"
+            label = _position_label(leg)
+            underlying, option_type, strike, expiration = pos_key
+            warnings.append(
+                {
+                    "type": "unclosed_position",
+                    "level": "info",
+                    "message": (
+                        f"Open position: {label} opened on {date} (no matching close yet)"
+                    ),
+                    "underlying": underlying,
+                    "option_type": option_type,
+                    "strike": strike,
+                    "expiration": expiration,
+                    "date": date,
+                }
+            )
+
+    bto_keys: set[tuple] = {
+        _position_key(t)
+        for t in trades
+        if _normalize_option_action(t.get("action")) == "BTO"
+    }
+    for pos_key, legs in open_legs.items():
+        for leg in legs:
+            if _normalize_option_action(leg.get("action")) != "STO":
+                continue
+            if pos_key not in bto_keys:
+                date = leg.get("date") or "unknown date"
+                label = _position_label(leg)
+                warnings.append(
+                    {
+                        "type": "naked_short",
+                        "level": "warning",
+                        "message": (
+                            f"Naked short: STO {label} on {date} has no offsetting long position"
+                        ),
+                    }
+                )
+
+    for idx, trade in enumerate(trades):
+        label = _position_label(trade)
+        row_num = idx + 1
+        action = _normalize_option_action(trade.get("action"))
+
+        if _is_invalid_positive_int(trade.get("contracts")):
+            warnings.append(
+                {
+                    "type": "invalid_contracts",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid contracts: "
+                        f"{trade.get('contracts')}"
+                    ),
+                }
+            )
+
+        premium = trade.get("premium")
+        if _is_invalid_non_negative(premium):
+            warnings.append(
+                {
+                    "type": "invalid_premium",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid premium: {premium}"
+                    ),
+                }
+            )
+        elif (
+            action in {"OEXP", "OASGN"}
+            and isinstance(premium, (int, float))
+            and premium != 0
+        ):
+            warnings.append(
+                {
+                    "type": "invalid_premium",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} {action} should have premium 0, "
+                        f"got {premium}"
+                    ),
+                }
+            )
+
+        if _is_invalid_positive(trade.get("strike")):
+            warnings.append(
+                {
+                    "type": "invalid_strike",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid strike: "
+                        f"{trade.get('strike')}"
+                    ),
+                }
+            )
+
+        if _is_invalid_positive_int(trade.get("multiplier")):
+            warnings.append(
+                {
+                    "type": "invalid_multiplier",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid multiplier: "
+                        f"{trade.get('multiplier')}"
+                    ),
+                }
+            )
+
+        if _is_invalid_non_negative(trade.get("fees")):
+            warnings.append(
+                {
+                    "type": "invalid_fees",
+                    "level": "warning",
+                    "message": (
+                        f"Row {row_num}: {label} has invalid fees: {trade.get('fees')}"
+                    ),
+                }
+            )
+
+    return warnings
 
 
 def calculate_options_pnl(trades: list[dict]) -> dict:
@@ -278,9 +612,7 @@ def _detect_options_broker_format(csv_data: str) -> str | None:
 
 
 # Trans Code values that represent actual options trades (not dividends, transfers, etc.)
-_ROBINHOOD_OPTIONS_TRADE_CODES: frozenset[str] = frozenset(
-    {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
-)
+_ROBINHOOD_OPTIONS_TRADE_CODES = VALID_OPTION_ACTIONS
 
 _ROBINHOOD_OPTION_DESC_RE = re.compile(
     r"^(?P<underlying>[A-Za-z0-9.\-]+)\s+"

@@ -3,6 +3,7 @@
 import pytest
 
 import options_analyzer
+from csv_analyzer import REQUIRED_SUMMARY_KEYS
 
 
 class TestOptionsAnalyzerSkeleton:
@@ -45,6 +46,11 @@ class TestOptionsAnalyzerSkeleton:
             }
         )
 
+    def test_options_summary_columns_match_stock_summary_keys(self):
+        assert (
+            options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS == REQUIRED_SUMMARY_KEYS
+        )
+
     def test_summary_columns_disjoint_from_required(self):
         assert options_analyzer.REQUIRED_OPTIONS_SUMMARY_COLUMNS.isdisjoint(
             options_analyzer.REQUIRED_OPTIONS_COLUMNS
@@ -57,6 +63,12 @@ class TestOptionsAnalyzerSkeleton:
         assert options_analyzer.VALID_OPTION_ACTIONS == frozenset(
             {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
         )
+
+    def test_open_and_close_actions_partition_valid_actions(self):
+        open_actions = options_analyzer._OPEN_OPTION_ACTIONS
+        close_actions = options_analyzer._CLOSE_OPTION_ACTIONS
+        assert open_actions.isdisjoint(close_actions)
+        assert open_actions | close_actions == options_analyzer.VALID_OPTION_ACTIONS
 
     def test_schema_constants_are_frozensets(self):
         for name in (
@@ -79,9 +91,6 @@ class TestOptionsAnalyzerSkeleton:
     @pytest.mark.parametrize(
         "func_name",
         [
-            "parse_options_detailed",
-            "parse_options_summary",
-            "validate_options",
             "calculate_options_pnl",
             "check_theta_decay_risk",
             "check_expired_worthless_pattern",
@@ -92,10 +101,7 @@ class TestOptionsAnalyzerSkeleton:
     def test_public_stubs_raise_not_implemented(self, func_name):
         func = getattr(options_analyzer, func_name)
         with pytest.raises(NotImplementedError):
-            if func_name == "parse_options_detailed":
-                func("date,underlying\n")
-            elif func_name in (
-                "validate_options",
+            if func_name in (
                 "check_theta_decay_risk",
                 "check_naked_selling_habit",
             ):
