@@ -1,0 +1,121 @@
+"""Tests for calculate_options_pnl() in options_analyzer."""
+
+import pytest
+
+from options_analyzer import calculate_options_pnl
+
+
+def _opt(
+    date="2024-01-01",
+    underlying="AAPL",
+    option_type="CALL",
+    action="BTO",
+    strike=185.0,
+    expiration="2024-01-19",
+    contracts=1,
+    premium=2.50,
+    multiplier=100,
+    fees=0.0,
+):
+    return {
+        "date": date,
+        "underlying": underlying,
+        "option_type": option_type,
+        "action": action,
+        "strike": strike,
+        "expiration": expiration,
+        "contracts": contracts,
+        "premium": premium,
+        "multiplier": multiplier,
+        "fees": fees,
+    }
+
+
+class TestCalculateOptionsPnlEmpty:
+    def test_empty_list(self):
+        assert calculate_options_pnl([]) == {"positions": [], "total_pnl": 0.0}
+
+
+class TestCalculateOptionsPnlLong:
+    def test_profitable_long(self):
+        open_trade = _opt(action="BTO", premium=2.50)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=4.00)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == 150.0
+        assert len(result["positions"]) == 1
+        assert result["positions"][0]["pnl"] == 150.0
+
+    def test_loss_on_long(self):
+        open_trade = _opt(action="BTO", premium=3.00)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=1.00)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == -200.0
+        assert result["positions"][0]["pnl"] == -200.0
+
+    def test_break_even(self):
+        open_trade = _opt(action="BTO", premium=2.50)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=2.50)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == 0.0
+        assert result["positions"][0]["pnl"] == 0.0
+
+    def test_contracts_and_multiplier_scaling(self):
+        open_trade = _opt(action="BTO", premium=1.00, contracts=2, multiplier=100)
+        close_trade = _opt(
+            action="BTC", date="2024-01-10", premium=2.00, contracts=2, multiplier=100
+        )
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == 200.0
+        assert result["positions"][0]["contracts"] == 2
+        assert result["positions"][0]["multiplier"] == 100
+
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN"])
+    def test_passive_close_included(self, close_action):
+        open_trade = _opt(action="BTO", premium=1.50)
+        close_trade = _opt(action=close_action, date="2024-01-19", premium=0.0)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert len(result["positions"]) == 1
+        assert result["positions"][0]["close_premium"] == 0.0
+        assert result["total_pnl"] == -150.0
+
+
+class TestCalculateOptionsPnlShortSkipped:
+    def test_sto_stc_pair_skipped(self):
+        open_trade = _opt(action="STO", premium=1.50)
+        close_trade = _opt(action="STC", date="2024-01-10", premium=0.50)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["positions"] == []
+        assert result["total_pnl"] == 0.0
+
+    def test_mixed_long_and_short(self):
+        long_open = _opt(action="BTO", premium=2.00)
+        long_close = _opt(action="BTC", date="2024-01-10", premium=3.00)
+        short_open = _opt(action="STO", date="2024-01-02", premium=1.50)
+        short_close = _opt(action="STC", date="2024-01-11", premium=0.50)
+        result = calculate_options_pnl([long_open, long_close, short_open, short_close])
+        assert len(result["positions"]) == 1
+        assert result["total_pnl"] == 100.0
+
+
+class TestCalculateOptionsPnlMultiple:
+    def test_multiple_long_positions_total(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=2.00)
+        first_close = _opt(action="BTC", date="2024-01-10", premium=3.00)
+        second_open = _opt(action="BTO", date="2024-01-02", premium=1.00)
+        second_close = _opt(action="BTC", date="2024-01-11", premium=2.00)
+        result = calculate_options_pnl(
+            [first_open, first_close, second_open, second_close]
+        )
+        assert len(result["positions"]) == 2
+        assert result["total_pnl"] == 200.0
+
+    def test_total_pnl_equals_sum_of_position_pnls(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=1.00005)
+        first_close = _opt(action="BTC", date="2024-01-10", premium=1.00010)
+        second_open = _opt(action="BTO", date="2024-01-02", premium=1.00005)
+        second_close = _opt(action="BTC", date="2024-01-11", premium=1.00010)
+        result = calculate_options_pnl(
+            [first_open, first_close, second_open, second_close]
+        )
+        position_pnls = [position["pnl"] for position in result["positions"]]
+        assert result["total_pnl"] == sum(position_pnls)

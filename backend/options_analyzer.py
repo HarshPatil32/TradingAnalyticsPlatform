@@ -600,9 +600,37 @@ def validate_options(trades: list[dict]) -> list[dict]:
 
 
 def calculate_options_pnl(trades: list[dict]) -> dict:
-    """Compute per-position P&L, equity curve, and total return from an options trade list."""
-    # TODO:
-    raise NotImplementedError
+    """Compute realized P&L for closed long positions using FIFO matching."""
+    match_result = match_options_fifo(trades)
+    positions = []
+    total_pnl = 0.0
+    for open_leg, close_leg in match_result.matched:
+        if _normalize_option_action(open_leg.get("action")) != "BTO":
+            continue
+        open_premium = float(open_leg["premium"])
+        close_premium = float(close_leg["premium"])
+        contracts = int(open_leg["contracts"])
+        # multiplier is optional in the CSV schema; parse_options_detailed always fills it.
+        multiplier = int(open_leg["multiplier"])
+        pnl = (close_premium - open_premium) * contracts * multiplier
+        rounded_pnl = round(pnl, 2)
+        total_pnl += rounded_pnl
+        positions.append(
+            {
+                "underlying": open_leg["underlying"],
+                "option_type": open_leg["option_type"],
+                "strike": open_leg["strike"],
+                "expiration": open_leg["expiration"],
+                "open_date": open_leg["date"],
+                "close_date": close_leg["date"],
+                "open_premium": open_premium,
+                "close_premium": close_premium,
+                "contracts": contracts,
+                "multiplier": multiplier,
+                "pnl": rounded_pnl,
+            }
+        )
+    return {"positions": positions, "total_pnl": round(total_pnl, 2)}
 
 
 def check_theta_decay_risk(trades: list[dict]) -> dict | None:

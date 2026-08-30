@@ -88,10 +88,15 @@ class TestOptionsAnalyzerSkeleton:
         assert options_analyzer.FREE_TIER_OPTIONS_ROW_LIMIT == 100
         assert isinstance(options_analyzer.FREE_TIER_OPTIONS_ROW_LIMIT, int)
 
+    def test_calculate_options_pnl_empty(self):
+        assert options_analyzer.calculate_options_pnl([]) == {
+            "positions": [],
+            "total_pnl": 0.0,
+        }
+
     @pytest.mark.parametrize(
         "func_name",
         [
-            "calculate_options_pnl",
             "check_theta_decay_risk",
             "check_expired_worthless_pattern",
             "check_naked_selling_habit",
@@ -108,7 +113,5 @@ class TestOptionsAnalyzerSkeleton:
                 func([])
             elif func_name == "check_expired_worthless_pattern":
                 func({})
-            elif func_name == "calculate_options_pnl":
-                func([])
             else:
                 func("")
