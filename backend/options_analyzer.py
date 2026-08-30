@@ -42,7 +42,9 @@ import io
 import logging
 import math
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import NamedTuple, cast
 
 from csv_analyzer import (
     _SYMBOL_RE,
@@ -107,6 +109,20 @@ VALID_OPTION_ACTIONS: frozenset[str] = frozenset(
 )
 
 DEFAULT_CONTRACT_MULTIPLIER: int = 100
+
+
+class ContractKey(NamedTuple):
+    underlying: str
+    option_type: str
+    strike: float
+    expiration: str
+
+
+@dataclass
+class MatchResult:
+    matched: list[tuple[dict, dict]] = field(default_factory=list)
+    unmatched_closes: list[dict] = field(default_factory=list)
+    unclosed_opens: list[dict] = field(default_factory=list)
 
 
 class OptionsFreeTierLimitExceeded(ValueError):
@@ -353,12 +369,12 @@ def _normalize_option_action(action: object) -> str:
     return str(action).strip().upper() if action is not None else ""
 
 
-def _position_key(trade: dict) -> tuple:
+def _position_key(trade: dict) -> ContractKey:
     underlying = str(trade.get("underlying") or "").strip().upper()
     option_type = str(trade.get("option_type") or "").strip().upper()
-    strike = trade.get("strike")
+    strike = cast(float, trade.get("strike"))
     expiration = str(trade.get("expiration") or "").strip()
-    return (underlying, option_type, strike, expiration)
+    return ContractKey(underlying, option_type, strike, expiration)
 
 
 def _position_label(trade: dict) -> str:
@@ -371,6 +387,26 @@ def _position_label(trade: dict) -> str:
 
 _OPEN_OPTION_ACTIONS = frozenset({"BTO", "STO"})
 _CLOSE_OPTION_ACTIONS = frozenset({"BTC", "STC", "OEXP", "OASGN"})
+
+
+def match_options_fifo(trades: list[dict]) -> MatchResult:
+    """Pair open and close legs per contract using FIFO matching."""
+    open_legs: dict[ContractKey, list[dict]] = {}
+    result = MatchResult()
+    for trade in trades:
+        action = _normalize_option_action(trade.get("action"))
+        key = _position_key(trade)
+        if action in _OPEN_OPTION_ACTIONS:
+            open_legs.setdefault(key, []).append(trade)
+        elif action in _CLOSE_OPTION_ACTIONS:
+            queue = open_legs.get(key)
+            if not queue:
+                result.unmatched_closes.append(trade)
+            else:
+                result.matched.append((queue.pop(0), trade))
+    for queue in open_legs.values():
+        result.unclosed_opens.extend(queue)
+    return result
 
 
 def validate_options(trades: list[dict]) -> list[dict]:
@@ -402,90 +438,84 @@ def validate_options(trades: list[dict]) -> list[dict]:
                 }
             )
 
-    open_legs: dict[tuple, list[dict]] = {}
-    for trade in trades:
-        action = _normalize_option_action(trade.get("action"))
-        pos_key = _position_key(trade)
-        if action in _OPEN_OPTION_ACTIONS:
-            open_legs.setdefault(pos_key, []).append(trade)
-        elif action in _CLOSE_OPTION_ACTIONS:
-            if not open_legs.get(pos_key):
-                date = trade.get("date") or "unknown date"
-                label = _position_label(trade)
-                warnings.append(
-                    {
-                        "type": "unmatched_close",
-                        "level": "warning",
-                        "message": (
-                            f"{action} for {label} on {date} has no preceding open"
-                        ),
-                    }
-                )
-            else:
-                matched_open = open_legs[pos_key].pop(0)
-                if action in {"OEXP", "OASGN"}:
-                    open_date = matched_open.get("date") or "unknown date"
-                    close_date = trade.get("date") or "unknown date"
-                    label = _position_label(trade)
-                    underlying, option_type, strike, expiration = pos_key
-                    warnings.append(
-                        {
-                            "type": "expired_position",
-                            "level": "info",
-                            "message": (
-                                f"Expired: {label} (opened {open_date}, expired {close_date})"
-                            ),
-                            "underlying": underlying,
-                            "option_type": option_type,
-                            "strike": strike,
-                            "expiration": expiration,
-                            "open_date": open_date,
-                            "date": close_date,
-                            "action": action,
-                        }
-                    )
+    match_result = match_options_fifo(trades)
 
-    for pos_key, legs in open_legs.items():
-        for leg in legs:
-            date = leg.get("date") or "unknown date"
-            label = _position_label(leg)
-            underlying, option_type, strike, expiration = pos_key
+    for trade in match_result.unmatched_closes:
+        action = _normalize_option_action(trade.get("action"))
+        date = trade.get("date") or "unknown date"
+        label = _position_label(trade)
+        warnings.append(
+            {
+                "type": "unmatched_close",
+                "level": "warning",
+                "message": (f"{action} for {label} on {date} has no preceding open"),
+            }
+        )
+
+    for matched_open, close_trade in match_result.matched:
+        action = _normalize_option_action(close_trade.get("action"))
+        if action in {"OEXP", "OASGN"}:
+            open_date = matched_open.get("date") or "unknown date"
+            close_date = close_trade.get("date") or "unknown date"
+            label = _position_label(close_trade)
+            pos_key = _position_key(close_trade)
             warnings.append(
                 {
-                    "type": "unclosed_position",
+                    "type": "expired_position",
                     "level": "info",
                     "message": (
-                        f"Open position: {label} opened on {date} (no matching close yet)"
+                        f"Expired: {label} (opened {open_date}, expired {close_date})"
                     ),
-                    "underlying": underlying,
-                    "option_type": option_type,
-                    "strike": strike,
-                    "expiration": expiration,
-                    "date": date,
+                    "underlying": pos_key.underlying,
+                    "option_type": pos_key.option_type,
+                    "strike": pos_key.strike,
+                    "expiration": pos_key.expiration,
+                    "open_date": open_date,
+                    "date": close_date,
+                    "action": action,
                 }
             )
 
-    bto_keys: set[tuple] = {
+    for leg in match_result.unclosed_opens:
+        date = leg.get("date") or "unknown date"
+        label = _position_label(leg)
+        pos_key = _position_key(leg)
+        warnings.append(
+            {
+                "type": "unclosed_position",
+                "level": "info",
+                "message": (
+                    f"Open position: {label} opened on {date} (no matching close yet)"
+                ),
+                "underlying": pos_key.underlying,
+                "option_type": pos_key.option_type,
+                "strike": pos_key.strike,
+                "expiration": pos_key.expiration,
+                "date": date,
+            }
+        )
+
+    bto_keys: set[ContractKey] = {
         _position_key(t)
         for t in trades
         if _normalize_option_action(t.get("action")) == "BTO"
     }
-    for pos_key, legs in open_legs.items():
-        for leg in legs:
-            if _normalize_option_action(leg.get("action")) != "STO":
-                continue
-            if pos_key not in bto_keys:
-                date = leg.get("date") or "unknown date"
-                label = _position_label(leg)
-                warnings.append(
-                    {
-                        "type": "naked_short",
-                        "level": "warning",
-                        "message": (
-                            f"Naked short: STO {label} on {date} has no offsetting long position"
-                        ),
-                    }
-                )
+    for leg in match_result.unclosed_opens:
+        if _normalize_option_action(leg.get("action")) != "STO":
+            continue
+        pos_key = _position_key(leg)
+        if pos_key not in bto_keys:
+            date = leg.get("date") or "unknown date"
+            label = _position_label(leg)
+            warnings.append(
+                {
+                    "type": "naked_short",
+                    "level": "warning",
+                    "message": (
+                        f"Naked short: STO {label} on {date} has no offsetting long position"
+                    ),
+                }
+            )
 
     for idx, trade in enumerate(trades):
         label = _position_label(trade)
