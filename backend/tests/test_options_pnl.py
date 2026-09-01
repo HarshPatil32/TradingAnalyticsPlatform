@@ -70,7 +70,7 @@ class TestCalculateOptionsPnlLong:
         assert result["positions"][0]["contracts"] == 2
         assert result["positions"][0]["multiplier"] == 100
 
-    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN"])
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN", "OEXER"])
     def test_passive_close_included(self, close_action):
         open_trade = _opt(action="BTO", premium=1.50)
         close_trade = _opt(action=close_action, date="2024-01-19", premium=0.0)
@@ -80,7 +80,7 @@ class TestCalculateOptionsPnlLong:
         assert result["positions"][0]["close_action"] == close_action
         assert result["total_pnl"] == -150.0
 
-    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN"])
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN", "OEXER"])
     def test_bto_expires_worthless_ignores_close_premium(self, close_action):
         open_trade = _opt(action="BTO", premium=2.50)
         close_trade = _opt(action=close_action, date="2024-01-19", premium=0.99)
@@ -144,7 +144,7 @@ class TestCalculateOptionsPnlShort:
         assert result["positions"][0]["close_action"] == "OASGN"
         assert result["positions"][0]["side"] == "short"
 
-    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN"])
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN", "OEXER"])
     def test_sto_expires_worthless_ignores_close_premium(self, close_action):
         open_trade = _opt(action="STO", premium=2.00)
         close_trade = _opt(action=close_action, date="2024-01-19", premium=0.99)

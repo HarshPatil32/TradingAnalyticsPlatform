@@ -10,13 +10,13 @@ Required columns (see REQUIRED_OPTIONS_COLUMNS):
     date          Trade date, YYYY-MM-DD.
     underlying    Ticker symbol of the underlying asset.
     option_type   One of VALID_OPTION_TYPES (CALL or PUT).
-    action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC, OEXP, OASGN).
+    action        One of VALID_OPTION_ACTIONS (BTO, STO, BTC, STC, OEXP, OASGN, OEXER).
     strike        Positive float, strike price in USD per share.
     expiration    Option expiration date, YYYY-MM-DD (distinct from date;
                   must be on or after date).
     contracts     Positive integer, number of contracts.
     premium       Non-negative float, quoted per share; total cash is
-                  premium * contracts * multiplier. OEXP/OASGN rows use 0.
+                  premium * contracts * multiplier. OEXP/OASGN/OEXER rows use 0.
 
 Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
     multiplier    Positive integer; defaults to DEFAULT_CONTRACT_MULTIPLIER
@@ -30,7 +30,9 @@ Optional columns (see OPTIONAL_OPTIONS_COLUMNS):
 Action vocabulary uses open/close semantics (BTO/STO/BTC/STC) rather than
 plain BUY/SELL so P&L pairing and risk checks can distinguish opening from
 closing legs. OEXP and OASGN are passive-close events (expired worthless,
-assigned) with premium 0; side resolution for P&L pairing is handled later.
+assigned) with premium 0; OEXER is active exercise by the long holder with
+premium 0 and converts the option position into an equity position at the
+strike price. Side resolution for P&L pairing is handled later.
 Broker-specific exports are normalised to this set by
 normalize_options_broker_format.
 """
@@ -105,7 +107,7 @@ VALID_OPTION_TYPES: frozenset[str] = frozenset({"CALL", "PUT"})
 
 # Open/close semantics required for P&L pairing and risk detection.
 VALID_OPTION_ACTIONS: frozenset[str] = frozenset(
-    {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
+    {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN", "OEXER"}
 )
 
 DEFAULT_CONTRACT_MULTIPLIER: int = 100
@@ -386,7 +388,14 @@ def _position_label(trade: dict) -> str:
 
 
 _OPEN_OPTION_ACTIONS = frozenset({"BTO", "STO"})
-_CLOSE_OPTION_ACTIONS = frozenset({"BTC", "STC", "OEXP", "OASGN"})
+_CLOSE_OPTION_ACTIONS = frozenset({"BTC", "STC", "OEXP", "OASGN", "OEXER"})
+
+_ASSIGNMENT_EXERCISE_MAP: dict[tuple[str, str, str], tuple[str, int]] = {
+    ("BTO", "CALL", "OEXER"): ("BUY", 1),
+    ("BTO", "PUT", "OEXER"): ("SELL", -1),
+    ("STO", "PUT", "OASGN"): ("BUY", -1),
+    ("STO", "CALL", "OASGN"): ("SELL", 1),
+}
 
 
 def match_options_fifo(trades: list[dict]) -> MatchResult:
@@ -454,11 +463,11 @@ def validate_options(trades: list[dict]) -> list[dict]:
 
     for matched_open, close_trade in match_result.matched:
         action = _normalize_option_action(close_trade.get("action"))
+        open_date = matched_open.get("date") or "unknown date"
+        close_date = close_trade.get("date") or "unknown date"
+        label = _position_label(close_trade)
+        pos_key = _position_key(close_trade)
         if action in {"OEXP", "OASGN"}:
-            open_date = matched_open.get("date") or "unknown date"
-            close_date = close_trade.get("date") or "unknown date"
-            label = _position_label(close_trade)
-            pos_key = _position_key(close_trade)
             warnings.append(
                 {
                     "type": "expired_position",
@@ -475,6 +484,25 @@ def validate_options(trades: list[dict]) -> list[dict]:
                     "action": action,
                 }
             )
+        elif action == "OEXER":
+            open_action = _normalize_option_action(matched_open.get("action"))
+            if (open_action, pos_key.option_type, action) in _ASSIGNMENT_EXERCISE_MAP:
+                warnings.append(
+                    {
+                        "type": "exercised_position",
+                        "level": "info",
+                        "message": (
+                            f"Exercised: {label} (opened {open_date}, exercised {close_date})"
+                        ),
+                        "underlying": pos_key.underlying,
+                        "option_type": pos_key.option_type,
+                        "strike": pos_key.strike,
+                        "expiration": pos_key.expiration,
+                        "open_date": open_date,
+                        "date": close_date,
+                        "action": action,
+                    }
+                )
 
     for leg in match_result.unclosed_opens:
         date = leg.get("date") or "unknown date"
@@ -546,7 +574,7 @@ def validate_options(trades: list[dict]) -> list[dict]:
                 }
             )
         elif (
-            action in {"OEXP", "OASGN"}
+            action in {"OEXP", "OASGN", "OEXER"}
             and isinstance(premium, (int, float))
             and premium != 0
         ):
@@ -609,7 +637,9 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
         close_action = _normalize_option_action(close_leg.get("action"))
         open_premium = float(open_leg["premium"])
         effective_close_premium = (
-            0.0 if close_action in {"OEXP", "OASGN"} else float(close_leg["premium"])
+            0.0
+            if close_action in {"OEXP", "OASGN", "OEXER"}
+            else float(close_leg["premium"])
         )
         contracts = int(open_leg["contracts"])
         # multiplier is optional in the CSV schema; parse_options_detailed always fills it.
@@ -640,6 +670,66 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
             }
         )
     return {"positions": positions, "total_pnl": round(total_pnl, 2)}
+
+
+def extract_assignment_exercise_events(trades: list[dict]) -> list[dict]:
+    """Convert matched assignment/exercise option closes into equity cost-basis events."""
+    match_result = match_options_fifo(trades)
+    events: list[dict] = []
+    for open_leg, close_leg in match_result.matched:
+        open_action = _normalize_option_action(open_leg.get("action"))
+        close_action = _normalize_option_action(close_leg.get("action"))
+        option_type = str(open_leg.get("option_type") or "").strip().upper()
+        mapping = _ASSIGNMENT_EXERCISE_MAP.get((open_action, option_type, close_action))
+        if mapping is None:
+            if close_action in {"OASGN", "OEXER"}:
+                logger.warning(
+                    "Unrecognized assignment/exercise combo: %s %s %s",
+                    open_action,
+                    option_type,
+                    close_action,
+                )
+            continue
+
+        equity_action, premium_sign = mapping
+        strike = float(open_leg["strike"])
+        open_premium = float(open_leg["premium"])
+        contracts = int(open_leg["contracts"])
+        multiplier = int(open_leg["multiplier"])
+        shares = contracts * multiplier
+        adjusted_price_per_share = round(strike + premium_sign * open_premium, 2)
+        if adjusted_price_per_share < 0:
+            logger.warning(
+                "Negative adjusted price for assignment/exercise: %s %s %s "
+                "(strike=%s, premium=%s)",
+                open_action,
+                option_type,
+                close_action,
+                strike,
+                open_premium,
+            )
+            continue
+        total_adjusted_cost = round(adjusted_price_per_share * shares, 2)
+        events.append(
+            {
+                "action": "M",
+                "symbol": open_leg["underlying"],
+                "date": close_leg["date"],
+                "shares": shares,
+                "equity_action": equity_action,
+                "strike": strike,
+                "adjusted_price_per_share": adjusted_price_per_share,
+                "total_adjusted_cost": total_adjusted_cost,
+                "source": close_action,
+                "option_type": option_type,
+                "open_action": open_action,
+                "open_date": open_leg["date"],
+                "expiration": open_leg["expiration"],
+                "contracts": contracts,
+                "multiplier": multiplier,
+            }
+        )
+    return events
 
 
 def check_theta_decay_risk(trades: list[dict]) -> dict | None:

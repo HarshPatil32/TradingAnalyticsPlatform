@@ -61,7 +61,7 @@ class TestOptionsAnalyzerSkeleton:
 
     def test_valid_option_actions(self):
         assert options_analyzer.VALID_OPTION_ACTIONS == frozenset(
-            {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN"}
+            {"BTO", "STO", "BTC", "STC", "OEXP", "OASGN", "OEXER"}
         )
 
     def test_open_and_close_actions_partition_valid_actions(self):

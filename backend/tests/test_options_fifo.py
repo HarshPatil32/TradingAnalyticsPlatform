@@ -120,7 +120,7 @@ class TestMatchOptionsFifoContractKey:
 
 
 class TestMatchOptionsFifoPassiveClose:
-    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN"])
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN", "OEXER"])
     def test_passive_close_matched(self, close_action):
         open_trade = _opt(action="BTO", date="2024-01-01")
         close_trade = _opt(action=close_action, date="2024-01-19", premium=0.0)

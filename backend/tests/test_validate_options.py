@@ -69,9 +69,9 @@ class TestValidateOptionsDuplicates:
 
 
 class TestValidateOptionsUnmatchedClose:
-    @pytest.mark.parametrize("action", ["BTC", "STC", "OEXP", "OASGN"])
+    @pytest.mark.parametrize("action", ["BTC", "STC", "OEXP", "OASGN", "OEXER"])
     def test_close_without_open_emits_warning(self, action):
-        premium = 0.0 if action in {"OEXP", "OASGN"} else 3.0
+        premium = 0.0 if action in {"OEXP", "OASGN", "OEXER"} else 3.0
         trade = _opt(action=action, premium=premium)
         warnings = validate_options([trade])
         unmatched = [w for w in warnings if w["type"] == "unmatched_close"]
@@ -140,6 +140,35 @@ class TestValidateOptionsExpiredPosition:
         assert "Expired:" in notice["message"]
         assert "2024-01-01" in notice["message"]
         assert "2024-01-19" in notice["message"]
+
+    def test_exercise_emits_exercised_position(self):
+        open_trade = _opt(action="BTO", date="2024-01-01", premium=2.5)
+        close_trade = _opt(action="OEXER", date="2024-01-19", premium=0.0)
+        warnings = validate_options([open_trade, close_trade])
+        exercised = [w for w in warnings if w["type"] == "exercised_position"]
+        assert len(exercised) == 1
+        notice = exercised[0]
+        assert notice["level"] == "info"
+        assert notice["action"] == "OEXER"
+        assert notice["underlying"] == "AAPL"
+        assert notice["option_type"] == "CALL"
+        assert notice["strike"] == 185.0
+        assert notice["expiration"] == "2024-01-19"
+        assert notice["open_date"] == "2024-01-01"
+        assert notice["date"] == "2024-01-19"
+        assert "Exercised:" in notice["message"]
+        assert not any(w["type"] == "expired_position" for w in warnings)
+
+    def test_unrecognized_exercise_combo_does_not_emit_exercised_position(self):
+        open_trade = _opt(
+            action="STO", option_type="CALL", date="2024-01-01", premium=1.5
+        )
+        close_trade = _opt(
+            action="OEXER", option_type="CALL", date="2024-01-19", premium=0.0
+        )
+        warnings = validate_options([open_trade, close_trade])
+        assert not any(w["type"] == "exercised_position" for w in warnings)
+        assert not any(w["type"] == "expired_position" for w in warnings)
 
     def test_normal_close_does_not_emit_expired_position(self):
         open_trade = _opt(action="BTO", date="2024-01-01")
@@ -249,8 +278,8 @@ class TestValidateOptionsInvalidValues:
         warnings = validate_options([trade])
         assert any(w["type"] == "invalid_fees" for w in warnings)
 
-    @pytest.mark.parametrize("action", ["OEXP", "OASGN"])
-    def test_passive_close_nonzero_premium_warns(self, action):
+    @pytest.mark.parametrize("action", ["OEXP", "OASGN", "OEXER"])
+    def test_assignment_exercise_close_nonzero_premium_warns(self, action):
         open_trade = _opt(action="STO", date="2024-01-01", premium=1.5)
         close_trade = _opt(action=action, date="2024-01-19", premium=1.0)
         warnings = validate_options([open_trade, close_trade])

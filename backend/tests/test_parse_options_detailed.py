@@ -345,6 +345,14 @@ class TestParseOptionsDetailedOexpOasgn:
         assert result[0]["action"] == "OASGN"
         assert result[0]["premium"] == 0.0
 
+    def test_oexer_with_zero_premium_parses(self):
+        csv_data = (
+            _OPTIONS_HEADER + "2024-01-15,AAPL,CALL,OEXER,185.50,2024-06-21,1,0\n"
+        )
+        result = parse_options_detailed(csv_data)
+        assert result[0]["action"] == "OEXER"
+        assert result[0]["premium"] == 0.0
+
     def test_oexp_with_nonzero_premium_accepted(self):
         csv_data = (
             _OPTIONS_HEADER + "2024-01-15,AAPL,CALL,OEXP,185.50,2024-06-21,1,2.50\n"
