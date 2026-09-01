@@ -606,16 +606,19 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
     total_pnl = 0.0
     for open_leg, close_leg in match_result.matched:
         action = _normalize_option_action(open_leg.get("action"))
+        close_action = _normalize_option_action(close_leg.get("action"))
         open_premium = float(open_leg["premium"])
-        close_premium = float(close_leg["premium"])
+        effective_close_premium = (
+            0.0 if close_action in {"OEXP", "OASGN"} else float(close_leg["premium"])
+        )
         contracts = int(open_leg["contracts"])
         # multiplier is optional in the CSV schema; parse_options_detailed always fills it.
         multiplier = int(open_leg["multiplier"])
         if action == "BTO":
-            pnl = (close_premium - open_premium) * contracts * multiplier
+            pnl = (effective_close_premium - open_premium) * contracts * multiplier
             side = "long"
         else:
-            pnl = (open_premium - close_premium) * contracts * multiplier
+            pnl = (open_premium - effective_close_premium) * contracts * multiplier
             side = "short"
         rounded_pnl = round(pnl, 2)
         total_pnl += rounded_pnl
@@ -628,7 +631,8 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
                 "open_date": open_leg["date"],
                 "close_date": close_leg["date"],
                 "open_premium": open_premium,
-                "close_premium": close_premium,
+                "close_premium": effective_close_premium,
+                "close_action": close_action,
                 "contracts": contracts,
                 "multiplier": multiplier,
                 "side": side,

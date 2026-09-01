@@ -77,7 +77,36 @@ class TestCalculateOptionsPnlLong:
         result = calculate_options_pnl([open_trade, close_trade])
         assert len(result["positions"]) == 1
         assert result["positions"][0]["close_premium"] == 0.0
+        assert result["positions"][0]["close_action"] == close_action
         assert result["total_pnl"] == -150.0
+
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN"])
+    def test_bto_expires_worthless_ignores_close_premium(self, close_action):
+        open_trade = _opt(action="BTO", premium=2.50)
+        close_trade = _opt(action=close_action, date="2024-01-19", premium=0.99)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == -250.0
+        assert result["positions"][0]["close_premium"] == 0.0
+        assert result["positions"][0]["close_action"] == close_action
+
+
+class TestCalculateOptionsPnlActiveClose:
+    @pytest.mark.parametrize(
+        ("open_action", "close_action", "expected_pnl"),
+        [
+            ("BTO", "BTC", -75.0),
+            ("STO", "STC", 75.0),
+        ],
+    )
+    def test_active_close_premium_not_overridden(
+        self, open_action, close_action, expected_pnl
+    ):
+        open_trade = _opt(action=open_action, premium=2.00)
+        close_trade = _opt(action=close_action, date="2024-01-10", premium=1.25)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["positions"][0]["close_premium"] == 1.25
+        assert result["positions"][0]["close_action"] == close_action
+        assert result["total_pnl"] == expected_pnl
 
 
 class TestCalculateOptionsPnlShort:
@@ -104,6 +133,7 @@ class TestCalculateOptionsPnlShort:
         result = calculate_options_pnl([open_trade, close_trade])
         assert result["total_pnl"] == 200.0
         assert result["positions"][0]["close_premium"] == 0.0
+        assert result["positions"][0]["close_action"] == "OEXP"
         assert result["positions"][0]["side"] == "short"
 
     def test_sto_oasgn_full_keep(self):
@@ -111,7 +141,17 @@ class TestCalculateOptionsPnlShort:
         close_trade = _opt(action="OASGN", date="2024-01-19", premium=0.0, contracts=2)
         result = calculate_options_pnl([open_trade, close_trade])
         assert result["total_pnl"] == 300.0
+        assert result["positions"][0]["close_action"] == "OASGN"
         assert result["positions"][0]["side"] == "short"
+
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN"])
+    def test_sto_expires_worthless_ignores_close_premium(self, close_action):
+        open_trade = _opt(action="STO", premium=2.00)
+        close_trade = _opt(action=close_action, date="2024-01-19", premium=0.99)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == 200.0
+        assert result["positions"][0]["close_premium"] == 0.0
+        assert result["positions"][0]["close_action"] == close_action
 
     def test_mixed_long_and_short(self):
         long_open = _opt(action="BTO", premium=2.00)
