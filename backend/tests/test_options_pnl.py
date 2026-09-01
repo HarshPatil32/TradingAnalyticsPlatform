@@ -44,6 +44,7 @@ class TestCalculateOptionsPnlLong:
         assert result["total_pnl"] == 150.0
         assert len(result["positions"]) == 1
         assert result["positions"][0]["pnl"] == 150.0
+        assert result["positions"][0]["side"] == "long"
 
     def test_loss_on_long(self):
         open_trade = _opt(action="BTO", premium=3.00)
@@ -79,13 +80,38 @@ class TestCalculateOptionsPnlLong:
         assert result["total_pnl"] == -150.0
 
 
-class TestCalculateOptionsPnlShortSkipped:
-    def test_sto_stc_pair_skipped(self):
+class TestCalculateOptionsPnlShort:
+    def test_sto_stc_profit(self):
         open_trade = _opt(action="STO", premium=1.50)
         close_trade = _opt(action="STC", date="2024-01-10", premium=0.50)
         result = calculate_options_pnl([open_trade, close_trade])
-        assert result["positions"] == []
-        assert result["total_pnl"] == 0.0
+        assert result["total_pnl"] == 100.0
+        assert len(result["positions"]) == 1
+        assert result["positions"][0]["pnl"] == 100.0
+        assert result["positions"][0]["side"] == "short"
+
+    def test_sto_stc_loss(self):
+        open_trade = _opt(action="STO", premium=1.00)
+        close_trade = _opt(action="STC", date="2024-01-10", premium=1.80)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == -80.0
+        assert result["positions"][0]["pnl"] == -80.0
+        assert result["positions"][0]["side"] == "short"
+
+    def test_sto_oexp_full_keep(self):
+        open_trade = _opt(action="STO", premium=2.00)
+        close_trade = _opt(action="OEXP", date="2024-01-19", premium=0.0)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == 200.0
+        assert result["positions"][0]["close_premium"] == 0.0
+        assert result["positions"][0]["side"] == "short"
+
+    def test_sto_oasgn_full_keep(self):
+        open_trade = _opt(action="STO", premium=1.50, contracts=2)
+        close_trade = _opt(action="OASGN", date="2024-01-19", premium=0.0, contracts=2)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_pnl"] == 300.0
+        assert result["positions"][0]["side"] == "short"
 
     def test_mixed_long_and_short(self):
         long_open = _opt(action="BTO", premium=2.00)
@@ -93,8 +119,10 @@ class TestCalculateOptionsPnlShortSkipped:
         short_open = _opt(action="STO", date="2024-01-02", premium=1.50)
         short_close = _opt(action="STC", date="2024-01-11", premium=0.50)
         result = calculate_options_pnl([long_open, long_close, short_open, short_close])
-        assert len(result["positions"]) == 1
-        assert result["total_pnl"] == 100.0
+        assert len(result["positions"]) == 2
+        assert result["total_pnl"] == 200.0
+        sides = {position["side"] for position in result["positions"]}
+        assert sides == {"long", "short"}
 
 
 class TestCalculateOptionsPnlMultiple:

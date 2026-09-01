@@ -600,19 +600,23 @@ def validate_options(trades: list[dict]) -> list[dict]:
 
 
 def calculate_options_pnl(trades: list[dict]) -> dict:
-    """Compute realized P&L for closed long positions using FIFO matching."""
+    """Compute realized P&L for closed long and short positions using FIFO matching."""
     match_result = match_options_fifo(trades)
     positions = []
     total_pnl = 0.0
     for open_leg, close_leg in match_result.matched:
-        if _normalize_option_action(open_leg.get("action")) != "BTO":
-            continue
+        action = _normalize_option_action(open_leg.get("action"))
         open_premium = float(open_leg["premium"])
         close_premium = float(close_leg["premium"])
         contracts = int(open_leg["contracts"])
         # multiplier is optional in the CSV schema; parse_options_detailed always fills it.
         multiplier = int(open_leg["multiplier"])
-        pnl = (close_premium - open_premium) * contracts * multiplier
+        if action == "BTO":
+            pnl = (close_premium - open_premium) * contracts * multiplier
+            side = "long"
+        else:
+            pnl = (open_premium - close_premium) * contracts * multiplier
+            side = "short"
         rounded_pnl = round(pnl, 2)
         total_pnl += rounded_pnl
         positions.append(
@@ -627,6 +631,7 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
                 "close_premium": close_premium,
                 "contracts": contracts,
                 "multiplier": multiplier,
+                "side": side,
                 "pnl": rounded_pnl,
             }
         )
