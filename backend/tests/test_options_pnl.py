@@ -33,7 +33,11 @@ def _opt(
 
 class TestCalculateOptionsPnlEmpty:
     def test_empty_list(self):
-        assert calculate_options_pnl([]) == {"positions": [], "total_pnl": 0.0}
+        assert calculate_options_pnl([]) == {
+            "positions": [],
+            "equity_curve": [],
+            "total_pnl": 0.0,
+        }
 
 
 class TestCalculateOptionsPnlLong:
@@ -261,3 +265,100 @@ class TestCalculateOptionsPnlFees:
         position_pnls = [position["pnl"] for position in result["positions"]]
         assert result["total_pnl"] == sum(position_pnls)
         assert result["total_pnl"] == 198.25
+
+
+class TestCalculateOptionsPnlEquityCurve:
+    def test_empty_equity_curve(self):
+        result = calculate_options_pnl([])
+        assert result["equity_curve"] == []
+
+    def test_single_position_equity_curve(self):
+        open_trade = _opt(action="BTO", premium=2.50)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=4.00)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["equity_curve"] == [
+            {"date": "2024-01-10", "cumulative_pnl": 150.0}
+        ]
+
+    def test_multiple_positions_sorted_by_close_date(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=2.00)
+        first_close = _opt(action="BTC", date="2024-01-10", premium=3.00)
+        second_open = _opt(action="BTO", date="2024-01-02", premium=1.00)
+        second_close = _opt(action="BTC", date="2024-01-05", premium=2.00)
+        result = calculate_options_pnl(
+            [first_open, first_close, second_open, second_close]
+        )
+        assert result["equity_curve"] == [
+            {"date": "2024-01-05", "cumulative_pnl": 100.0},
+            {"date": "2024-01-10", "cumulative_pnl": 200.0},
+        ]
+
+    def test_cumulative_pnl_accumulates(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=1.00)
+        first_close = _opt(action="BTC", date="2024-01-05", premium=2.00)
+        second_open = _opt(action="BTO", date="2024-01-02", premium=1.00)
+        second_close = _opt(action="BTC", date="2024-01-10", premium=2.00)
+        third_open = _opt(action="BTO", date="2024-01-03", premium=1.00)
+        third_close = _opt(action="BTC", date="2024-01-15", premium=2.00)
+        result = calculate_options_pnl(
+            [
+                first_open,
+                first_close,
+                second_open,
+                second_close,
+                third_open,
+                third_close,
+            ]
+        )
+        cumulative_values = [
+            point["cumulative_pnl"] for point in result["equity_curve"]
+        ]
+        assert cumulative_values == [100.0, 200.0, 300.0]
+
+    def test_same_close_date_multiple_positions(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=1.00)
+        first_close = _opt(action="BTC", date="2024-01-10", premium=2.00)
+        second_open = _opt(action="BTO", date="2024-01-02", premium=1.50)
+        second_close = _opt(action="BTC", date="2024-01-10", premium=2.50)
+        result = calculate_options_pnl(
+            [first_open, first_close, second_open, second_close]
+        )
+        assert result["equity_curve"] == [
+            {"date": "2024-01-10", "cumulative_pnl": 100.0},
+            {"date": "2024-01-10", "cumulative_pnl": 200.0},
+        ]
+
+    def test_mixed_long_short_equity_curve(self):
+        long_open = _opt(action="BTO", premium=2.00)
+        long_close = _opt(action="BTC", date="2024-01-10", premium=3.00)
+        short_open = _opt(action="STO", date="2024-01-02", premium=1.50)
+        short_close = _opt(action="STC", date="2024-01-11", premium=2.50)
+        result = calculate_options_pnl([long_open, long_close, short_open, short_close])
+        assert result["equity_curve"] == [
+            {"date": "2024-01-10", "cumulative_pnl": 100.0},
+            {"date": "2024-01-11", "cumulative_pnl": 0.0},
+        ]
+
+    def test_equity_curve_last_point_equals_total_pnl(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=2.00, fees=0.50)
+        first_close = _opt(action="BTC", date="2024-01-10", premium=3.00, fees=0.25)
+        second_open = _opt(action="STO", date="2024-01-02", premium=1.50, fees=0.75)
+        second_close = _opt(action="STC", date="2024-01-11", premium=0.50, fees=0.25)
+        result = calculate_options_pnl(
+            [first_open, first_close, second_open, second_close]
+        )
+        assert result["equity_curve"][-1]["cumulative_pnl"] == result["total_pnl"]
+
+    def test_equity_curve_ends_negative(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=2.00)
+        first_close = _opt(action="BTC", date="2024-01-10", premium=3.00)
+        second_open = _opt(action="BTO", date="2024-01-02", premium=3.00)
+        second_close = _opt(action="BTC", date="2024-01-11", premium=1.00)
+        result = calculate_options_pnl(
+            [first_open, first_close, second_open, second_close]
+        )
+        assert result["equity_curve"] == [
+            {"date": "2024-01-10", "cumulative_pnl": 100.0},
+            {"date": "2024-01-11", "cumulative_pnl": -100.0},
+        ]
+        assert result["total_pnl"] == -100.0

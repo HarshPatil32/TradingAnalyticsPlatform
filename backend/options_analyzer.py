@@ -631,7 +631,6 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
     """Compute realized P&L for closed long and short positions using FIFO matching."""
     match_result = match_options_fifo(trades)
     positions = []
-    total_pnl = 0.0
     for open_leg, close_leg in match_result.matched:
         action = _normalize_option_action(open_leg.get("action"))
         close_action = _normalize_option_action(close_leg.get("action"))
@@ -653,7 +652,6 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
         fees = float(open_leg.get("fees", 0.0)) + float(close_leg.get("fees", 0.0))
         rounded_fees = round(fees, 2)
         rounded_pnl = round(pnl - fees, 2)
-        total_pnl += rounded_pnl
         positions.append(
             {
                 "underlying": open_leg["underlying"],
@@ -672,7 +670,25 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
                 "pnl": rounded_pnl,
             }
         )
-    return {"positions": positions, "total_pnl": round(total_pnl, 2)}
+
+    running_pnl = 0.0
+    equity_curve = []
+    for pos in sorted(positions, key=lambda row: row["close_date"]):
+        running_pnl += pos["pnl"]
+        equity_curve.append(
+            {
+                "date": pos["close_date"],
+                "cumulative_pnl": round(running_pnl, 2),
+            }
+        )
+
+    total_pnl = equity_curve[-1]["cumulative_pnl"] if equity_curve else 0.0
+
+    return {
+        "positions": positions,
+        "equity_curve": equity_curve,
+        "total_pnl": total_pnl,
+    }
 
 
 def extract_assignment_exercise_events(trades: list[dict]) -> list[dict]:

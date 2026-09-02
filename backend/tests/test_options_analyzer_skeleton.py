@@ -91,6 +91,7 @@ class TestOptionsAnalyzerSkeleton:
     def test_calculate_options_pnl_empty(self):
         assert options_analyzer.calculate_options_pnl([]) == {
             "positions": [],
+            "equity_curve": [],
             "total_pnl": 0.0,
         }
 
