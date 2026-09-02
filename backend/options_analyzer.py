@@ -650,7 +650,9 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
         else:
             pnl = (open_premium - effective_close_premium) * contracts * multiplier
             side = "short"
-        rounded_pnl = round(pnl, 2)
+        fees = float(open_leg.get("fees", 0.0)) + float(close_leg.get("fees", 0.0))
+        rounded_fees = round(fees, 2)
+        rounded_pnl = round(pnl - fees, 2)
         total_pnl += rounded_pnl
         positions.append(
             {
@@ -666,6 +668,7 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
                 "contracts": contracts,
                 "multiplier": multiplier,
                 "side": side,
+                "fees": rounded_fees,
                 "pnl": rounded_pnl,
             }
         )
