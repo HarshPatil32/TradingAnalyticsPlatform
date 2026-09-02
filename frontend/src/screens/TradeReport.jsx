@@ -1,7 +1,7 @@
 // Full trade analysis report shown after CSV upload
 import { useState } from 'react'
 import { Crown, ArrowLeft } from 'lucide-react'
-import { computeMetrics, fmtPct, fmtDate, StatCard } from './tradeReportHelpers'
+import { computeMetrics, fmtPct, fmtUsd, fmtDate, StatCard } from './tradeReportHelpers'
 import BenchmarkComparison from './BenchmarkComparison'
 import BehavioralFlags from './BehavioralFlags'
 import EquityCurve from './EquityCurve'
@@ -20,7 +20,7 @@ export default function TradeReport({ result, onBack, isPro = false, onUpgrade, 
 
   const {
     numTrades, numClosed, openCount, openPositions, startDate, endDate,
-    grossReturnPct, netReturnPct, commissionsPct, slippagePct, spreadPct, taxPct, totalCostPct,
+    grossReturnPct, grossPnlUsd, netReturnPct, commissionsPct, slippagePct, spreadPct, taxPct, totalCostPct,
     winRate, spyReturn, qqqReturn,
     dispositionWarning, overtradingWarning, concentrationWarning, lowSampleWarning,
     avgWinnerDays, avgLoserDays, dispositionRatio,
@@ -55,9 +55,14 @@ export default function TradeReport({ result, onBack, isPro = false, onUpgrade, 
 
         {/* Summary Stats */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
             <StatCard label="Trades Analyzed" value={numTrades} />
             <StatCard label="Period" value={periodText} />
+            <StatCard
+              label="Realized P&L"
+              value={fmtUsd(grossPnlUsd)}
+              color={grossPnlUsd >= 0 ? 'green' : 'red'}
+            />
             <StatCard
               label="Gross Return"
               value={fmtPct(grossReturnPct)}

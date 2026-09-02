@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { computeMetrics, fmtDate } from './tradeReportHelpers'
+import { computeMetrics, fmtDate, fmtUsd } from './tradeReportHelpers'
 import TradeReport from './TradeReport'
 
 function makeResult(overrides = {}) {
@@ -93,6 +93,35 @@ describe('computeMetrics', () => {
     }))
     expect(metrics.taxPct).toBeLessThan(0)
   })
+
+  it('returns grossPnlUsd from pnl.total_pnl', () => {
+    const metrics = computeMetrics(makeResult({
+      pnl: { trade_pnl: [], total_pnl: 500, total_return_pct: 10 },
+    }))
+    expect(metrics.grossPnlUsd).toBe(500)
+  })
+})
+
+describe('fmtUsd', () => {
+  it('returns N/A for null', () => {
+    expect(fmtUsd(null)).toBe('N/A')
+  })
+
+  it('returns N/A for NaN', () => {
+    expect(fmtUsd(NaN)).toBe('N/A')
+  })
+
+  it('formats positive values with plus sign', () => {
+    expect(fmtUsd(500)).toBe('+$500.00')
+  })
+
+  it('formats negative values with minus sign', () => {
+    expect(fmtUsd(-200)).toBe('-$200.00')
+  })
+
+  it('formats zero with plus sign', () => {
+    expect(fmtUsd(0)).toBe('+$0.00')
+  })
 })
 
 describe('fmtDate', () => {
@@ -123,6 +152,25 @@ describe('TradeReport', () => {
     const { container } = render(<TradeReport result={null} onBack={onBack} />)
     expect(onBack).toHaveBeenCalledTimes(1)
     expect(container.firstChild).toBeNull()
+  })
+
+  it('renders the Realized P&L stat card', () => {
+    const result = makeResult({
+      pnl: { trade_pnl: [], total_pnl: 1250.5, total_return_pct: 12 },
+    })
+    render(<TradeReport result={result} onBack={vi.fn()} />)
+    expect(screen.getByText('Realized P&L')).toBeInTheDocument()
+    expect(screen.getByText('+$1,250.50')).toBeInTheDocument()
+  })
+
+  it('renders negative Realized P&L in red', () => {
+    const result = makeResult({
+      pnl: { trade_pnl: [], total_pnl: -500, total_return_pct: -10 },
+    })
+    render(<TradeReport result={result} onBack={vi.fn()} />)
+    const value = screen.getByText('Realized P&L').nextElementSibling
+    expect(value).toHaveTextContent('-$500.00')
+    expect(value).toHaveClass('text-red-400')
   })
 
   it('shows N/A in the SPY stat card when benchmark data is missing', () => {

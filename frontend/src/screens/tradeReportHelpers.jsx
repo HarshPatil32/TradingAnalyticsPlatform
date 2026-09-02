@@ -13,6 +13,12 @@ export function fmtRate(val, decimals = 1) {
   return `${Number(val).toFixed(decimals)}%`
 }
 
+export function fmtUsd(val) {
+  if (val == null || isNaN(val)) return 'N/A'
+  const sign = val >= 0 ? '+' : '-'
+  return `${sign}$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
 export function fmtDate(dateStr) {
   if (!dateStr) return null
   const parsed = new Date(dateStr + 'T00:00:00')
@@ -102,6 +108,7 @@ export function computeMetrics(result) {
     startDate,
     endDate,
     grossReturnPct,
+    grossPnlUsd,
     netReturnPct,
     commissionsPct,
     slippagePct,
