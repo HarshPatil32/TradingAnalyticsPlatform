@@ -49,6 +49,74 @@ describe('BehavioralFlags', () => {
     ).toBeInTheDocument()
   })
 
+  it('renders holding period card when both values are present', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        avgWinnerDays={10}
+        avgLoserDays={20}
+      />
+    )
+    expect(screen.getByText('Average Holding Period')).toBeInTheDocument()
+    expect(screen.getByText('10 days')).toBeInTheDocument()
+    expect(screen.getByText('20 days')).toBeInTheDocument()
+  })
+
+  it('renders holding period card with N/A for losers when only winners present', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        avgWinnerDays={5}
+        avgLoserDays={null}
+      />
+    )
+    expect(screen.getByText('Average Holding Period')).toBeInTheDocument()
+    expect(screen.getByText('5 days')).toBeInTheDocument()
+    expect(screen.getByText('N/A')).toBeInTheDocument()
+  })
+
+  it('renders holding period card with N/A for winners when only losers present', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        avgWinnerDays={null}
+        avgLoserDays={15}
+      />
+    )
+    expect(screen.getByText('Average Holding Period')).toBeInTheDocument()
+    expect(screen.getByText('15 days')).toBeInTheDocument()
+    expect(screen.getByText('N/A')).toBeInTheDocument()
+  })
+
+  it('renders same-day holding period as less than one day', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        avgWinnerDays={0}
+        avgLoserDays={null}
+      />
+    )
+    expect(screen.getByText('< 1 day')).toBeInTheDocument()
+    expect(screen.getByText('N/A')).toBeInTheDocument()
+  })
+
+  it('rounds fractional holding days to whole days', () => {
+    render(
+      <BehavioralFlags
+        {...baseProps}
+        avgWinnerDays={12.5}
+        avgLoserDays={20.4}
+      />
+    )
+    expect(screen.getByText('13 days')).toBeInTheDocument()
+    expect(screen.getByText('20 days')).toBeInTheDocument()
+  })
+
+  it('does not render holding period card when both values are null', () => {
+    render(<BehavioralFlags {...baseProps} />)
+    expect(screen.queryByText('Average Holding Period')).not.toBeInTheDocument()
+  })
+
   it('falls back to warning message when disposition holding days are missing', () => {
     render(
       <BehavioralFlags

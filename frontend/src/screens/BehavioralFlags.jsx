@@ -4,6 +4,12 @@ import { ChevronDown } from 'lucide-react'
 import { FlagIcon, CostRow, fmtPct, fmtDate } from './tradeReportHelpers'
 import WinRateCard from './WinRateCard'
 
+function formatHoldingDays(days) {
+  if (days == null) return 'N/A'
+  if (days < 1) return '< 1 day'
+  return `${Math.round(days)} days`
+}
+
 export default function BehavioralFlags({
   dispositionWarning,
   dispositionRatio,
@@ -59,6 +65,27 @@ export default function BehavioralFlags({
                 {avgWinnerDays != null && avgLoserDays != null
                   ? `Your winning trades were closed after an average of ${avgWinnerDays} days, while losing trades stayed open for ${avgLoserDays} days. This is a classic sign of the disposition effect — the tendency to sell winners too early and hold onto losers hoping they'll recover.`
                   : dispositionWarning.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Average holding period */}
+      {(avgWinnerDays != null || avgLoserDays != null) && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <h3 className="font-semibold text-white mb-4">Average Holding Period</h3>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <span className="text-xs text-zinc-500 uppercase tracking-wide">Winners</span>
+              <p className="text-2xl font-bold text-green-400 mt-1">
+                {formatHoldingDays(avgWinnerDays)}
+              </p>
+            </div>
+            <div>
+              <span className="text-xs text-zinc-500 uppercase tracking-wide">Losers</span>
+              <p className="text-2xl font-bold text-red-400 mt-1">
+                {formatHoldingDays(avgLoserDays)}
               </p>
             </div>
           </div>

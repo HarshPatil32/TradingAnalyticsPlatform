@@ -55,4 +55,16 @@ describe('BehavioralFlags integration', () => {
     expect(screen.getByText(/You placed 3 of your 4 trades in AAPL/)).toBeInTheDocument()
     expect(screen.getByText(/What Your Trades Are Telling You/)).toBeInTheDocument()
   })
+
+  it('wires holding period metrics from API result through TradeReport to the UI', () => {
+    const metrics = computeMetrics(concentratedApiResult)
+    expect(metrics.avgWinnerDays).toBe(10)
+    expect(metrics.avgLoserDays).toBe(20)
+
+    render(<TradeReport result={concentratedApiResult} onBack={vi.fn()} />)
+
+    expect(screen.getByText('Average Holding Period')).toBeInTheDocument()
+    expect(screen.getByText('10 days')).toBeInTheDocument()
+    expect(screen.getByText('20 days')).toBeInTheDocument()
+  })
 })
