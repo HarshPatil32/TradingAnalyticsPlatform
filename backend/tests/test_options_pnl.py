@@ -37,6 +37,8 @@ class TestCalculateOptionsPnlEmpty:
             "positions": [],
             "equity_curve": [],
             "total_pnl": 0.0,
+            "total_capital_at_risk": 0.0,
+            "total_return_pct_on_risk": 0.0,
         }
 
 
@@ -362,3 +364,95 @@ class TestCalculateOptionsPnlEquityCurve:
             {"date": "2024-01-11", "cumulative_pnl": -100.0},
         ]
         assert result["total_pnl"] == -100.0
+
+
+class TestCapitalAtRisk:
+    def test_long_capital_at_risk(self):
+        open_trade = _opt(action="BTO", premium=2.50, contracts=1, multiplier=100)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=4.00)
+        result = calculate_options_pnl([open_trade, close_trade])
+        pos = result["positions"][0]
+        assert pos["capital_at_risk"] == 250.0
+        assert pos["return_pct_on_risk"] == 60.0
+
+    def test_short_capital_at_risk_is_none(self):
+        open_trade = _opt(action="STO", premium=1.50)
+        close_trade = _opt(action="STC", date="2024-01-10", premium=0.50)
+        result = calculate_options_pnl([open_trade, close_trade])
+        pos = result["positions"][0]
+        assert pos["capital_at_risk"] is None
+        assert pos["return_pct_on_risk"] is None
+
+    def test_losing_long_return_pct_is_negative(self):
+        open_trade = _opt(action="BTO", premium=3.00)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=1.00)
+        result = calculate_options_pnl([open_trade, close_trade])
+        pos = result["positions"][0]
+        assert pos["capital_at_risk"] == 300.0
+        assert pos["return_pct_on_risk"] == pytest.approx(-66.6667, rel=1e-4)
+
+    def test_zero_premium_long_return_pct_is_none(self):
+        open_trade = _opt(action="BTO", premium=0.0)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=0.50)
+        result = calculate_options_pnl([open_trade, close_trade])
+        pos = result["positions"][0]
+        assert pos["capital_at_risk"] == 0.0
+        assert pos["return_pct_on_risk"] is None
+
+    def test_mixed_long_short_total_return_uses_long_capital_only(self):
+        long_open = _opt(action="BTO", premium=2.00)
+        long_close = _opt(action="BTC", date="2024-01-10", premium=3.00)
+        short_open = _opt(action="STO", date="2024-01-02", premium=1.50)
+        short_close = _opt(action="STC", date="2024-01-11", premium=0.50)
+        result = calculate_options_pnl([long_open, long_close, short_open, short_close])
+        assert result["total_capital_at_risk"] == 200.0
+        assert result["total_return_pct_on_risk"] == 50.0
+        assert result["total_pnl"] == 200.0
+
+    def test_all_shorts_total_return_is_zero(self):
+        open_trade = _opt(action="STO", premium=1.50)
+        close_trade = _opt(action="STC", date="2024-01-10", premium=0.50)
+        result = calculate_options_pnl([open_trade, close_trade])
+        assert result["total_capital_at_risk"] == 0.0
+        assert result["total_return_pct_on_risk"] == 0.0
+
+    def test_fees_reduce_return_pct_on_risk(self):
+        open_trade = _opt(action="BTO", premium=2.50, fees=1.25)
+        close_trade = _opt(action="BTC", date="2024-01-10", premium=4.00)
+        result = calculate_options_pnl([open_trade, close_trade])
+        pos = result["positions"][0]
+        assert pos["pnl"] == 148.75
+        assert pos["return_pct_on_risk"] == 59.5
+
+    def test_multi_contract_long_scales_capital_at_risk(self):
+        open_trade = _opt(action="BTO", premium=1.00, contracts=2, multiplier=100)
+        close_trade = _opt(
+            action="BTC", date="2024-01-10", premium=2.00, contracts=2, multiplier=100
+        )
+        result = calculate_options_pnl([open_trade, close_trade])
+        pos = result["positions"][0]
+        assert pos["capital_at_risk"] == 200.0
+        assert pos["return_pct_on_risk"] == 100.0
+        assert result["total_capital_at_risk"] == 200.0
+        assert result["total_return_pct_on_risk"] == 100.0
+
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN", "OEXER"])
+    def test_long_expires_worthless_return_pct_on_risk(self, close_action):
+        open_trade = _opt(action="BTO", premium=1.50)
+        close_trade = _opt(action=close_action, date="2024-01-19", premium=0.0)
+        result = calculate_options_pnl([open_trade, close_trade])
+        pos = result["positions"][0]
+        assert pos["capital_at_risk"] == 150.0
+        assert pos["return_pct_on_risk"] == -100.0
+        assert result["total_return_pct_on_risk"] == -100.0
+
+    def test_total_return_pct_on_risk_two_longs(self):
+        first_open = _opt(action="BTO", date="2024-01-01", premium=2.00)
+        first_close = _opt(action="BTC", date="2024-01-10", premium=3.00)
+        second_open = _opt(action="BTO", date="2024-01-02", premium=1.00)
+        second_close = _opt(action="BTC", date="2024-01-11", premium=2.00)
+        result = calculate_options_pnl(
+            [first_open, first_close, second_open, second_close]
+        )
+        assert result["total_capital_at_risk"] == 300.0
+        assert result["total_return_pct_on_risk"] == pytest.approx(66.6667, rel=1e-4)

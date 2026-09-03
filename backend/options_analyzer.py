@@ -652,6 +652,12 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
         fees = float(open_leg.get("fees", 0.0)) + float(close_leg.get("fees", 0.0))
         rounded_fees = round(fees, 2)
         rounded_pnl = round(pnl - fees, 2)
+        capital_at_risk = (
+            round(open_premium * contracts * multiplier, 2) if action == "BTO" else None
+        )
+        return_pct_on_risk = (
+            round(rounded_pnl / capital_at_risk * 100, 4) if capital_at_risk else None
+        )
         positions.append(
             {
                 "underlying": open_leg["underlying"],
@@ -668,6 +674,8 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
                 "side": side,
                 "fees": rounded_fees,
                 "pnl": rounded_pnl,
+                "capital_at_risk": capital_at_risk,
+                "return_pct_on_risk": return_pct_on_risk,
             }
         )
 
@@ -684,10 +692,21 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
 
     total_pnl = equity_curve[-1]["cumulative_pnl"] if equity_curve else 0.0
 
+    long_positions = [p for p in positions if p["capital_at_risk"] is not None]
+    total_capital_at_risk = round(sum(p["capital_at_risk"] for p in long_positions), 2)
+    long_pnl = sum(p["pnl"] for p in long_positions)
+    total_return_pct_on_risk = (
+        round(long_pnl / total_capital_at_risk * 100, 4)
+        if total_capital_at_risk > 0
+        else 0.0
+    )
+
     return {
         "positions": positions,
         "equity_curve": equity_curve,
         "total_pnl": total_pnl,
+        "total_capital_at_risk": total_capital_at_risk,
+        "total_return_pct_on_risk": total_return_pct_on_risk,
     }
 
 
