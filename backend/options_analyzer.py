@@ -701,12 +701,29 @@ def calculate_options_pnl(trades: list[dict]) -> dict:
         else 0.0
     )
 
+    premium_paid = 0.0
+    premium_received = 0.0
+    for pos in positions:
+        cash = pos["contracts"] * pos["multiplier"]
+        if pos["side"] == "long":
+            premium_paid += pos["open_premium"] * cash
+        else:
+            premium_received += pos["open_premium"] * cash
+        if pos["close_action"] == "BTC":
+            premium_paid += pos["close_premium"] * cash
+        elif pos["close_action"] == "STC":
+            premium_received += pos["close_premium"] * cash
+    total_premium_paid = round(premium_paid, 2)
+    total_premium_received = round(premium_received, 2)
+
     return {
         "positions": positions,
         "equity_curve": equity_curve,
         "total_pnl": total_pnl,
         "total_capital_at_risk": total_capital_at_risk,
         "total_return_pct_on_risk": total_return_pct_on_risk,
+        "total_premium_paid": total_premium_paid,
+        "total_premium_received": total_premium_received,
     }
 
 

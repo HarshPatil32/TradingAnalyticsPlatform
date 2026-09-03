@@ -39,6 +39,8 @@ class TestCalculateOptionsPnlEmpty:
             "total_pnl": 0.0,
             "total_capital_at_risk": 0.0,
             "total_return_pct_on_risk": 0.0,
+            "total_premium_paid": 0.0,
+            "total_premium_received": 0.0,
         }
 
 
@@ -456,3 +458,95 @@ class TestCapitalAtRisk:
         )
         assert result["total_capital_at_risk"] == 300.0
         assert result["total_return_pct_on_risk"] == pytest.approx(66.6667, rel=1e-4)
+
+
+class TestPremiumTotals:
+    def test_long_bto_btc(self):
+        result = calculate_options_pnl(
+            [
+                _opt(action="BTO", premium=2.50),
+                _opt(action="BTC", date="2024-01-10", premium=4.00),
+            ]
+        )
+        assert result["total_premium_paid"] == 650.0
+        assert result["total_premium_received"] == 0.0
+
+    def test_long_bto_stc(self):
+        result = calculate_options_pnl(
+            [
+                _opt(action="BTO", premium=2.50),
+                _opt(action="STC", date="2024-01-10", premium=4.00),
+            ]
+        )
+        assert result["total_premium_paid"] == 250.0
+        assert result["total_premium_received"] == 400.0
+
+    def test_short_sto_stc(self):
+        result = calculate_options_pnl(
+            [
+                _opt(action="STO", premium=1.50),
+                _opt(action="STC", date="2024-01-10", premium=0.50),
+            ]
+        )
+        assert result["total_premium_paid"] == 0.0
+        assert result["total_premium_received"] == 200.0
+
+    def test_short_sto_btc(self):
+        result = calculate_options_pnl(
+            [
+                _opt(action="STO", premium=1.50),
+                _opt(action="BTC", date="2024-01-10", premium=0.50),
+            ]
+        )
+        assert result["total_premium_paid"] == 50.0
+        assert result["total_premium_received"] == 150.0
+
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN", "OEXER"])
+    def test_long_passive_close_no_received(self, close_action):
+        result = calculate_options_pnl(
+            [
+                _opt(action="BTO", premium=2.00),
+                _opt(action=close_action, date="2024-01-19", premium=0.99),
+            ]
+        )
+        assert result["total_premium_paid"] == 200.0
+        assert result["total_premium_received"] == 0.0
+
+    @pytest.mark.parametrize("close_action", ["OEXP", "OASGN", "OEXER"])
+    def test_short_passive_close_full_received(self, close_action):
+        result = calculate_options_pnl(
+            [
+                _opt(action="STO", premium=1.50),
+                _opt(action=close_action, date="2024-01-19", premium=0.0),
+            ]
+        )
+        assert result["total_premium_paid"] == 0.0
+        assert result["total_premium_received"] == 150.0
+
+    def test_mixed_long_and_short(self):
+        result = calculate_options_pnl(
+            [
+                _opt(action="BTO", premium=2.00),
+                _opt(action="STC", date="2024-01-10", premium=3.00),
+                _opt(action="STO", date="2024-01-02", premium=1.50),
+                _opt(action="STC", date="2024-01-11", premium=0.50),
+            ]
+        )
+        assert result["total_premium_paid"] == 200.0
+        assert result["total_premium_received"] == 500.0
+
+    def test_contracts_and_multiplier_scaling(self):
+        result = calculate_options_pnl(
+            [
+                _opt(action="BTO", premium=1.00, contracts=3, multiplier=100),
+                _opt(
+                    action="STC",
+                    date="2024-01-10",
+                    premium=2.00,
+                    contracts=3,
+                    multiplier=100,
+                ),
+            ]
+        )
+        assert result["total_premium_paid"] == 300.0
+        assert result["total_premium_received"] == 600.0

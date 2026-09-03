@@ -93,6 +93,10 @@ class TestOptionsAnalyzerSkeleton:
             "positions": [],
             "equity_curve": [],
             "total_pnl": 0.0,
+            "total_capital_at_risk": 0.0,
+            "total_return_pct_on_risk": 0.0,
+            "total_premium_paid": 0.0,
+            "total_premium_received": 0.0,
         }
 
     @pytest.mark.parametrize(
