@@ -63,7 +63,19 @@ export function computeMetrics(result) {
     totalCapital > 0 && estimatedTaxUsd > 0 ? -(estimatedTaxUsd / totalCapital) * 100 : 0
   const totalCostPct = commissionsPct + slippagePct + spreadPct + taxPct
 
-  const numWinners = tradePnl.filter((t) => t.pnl > 0).length
+  let numWinners = 0
+  let numLosers = 0
+  let grossWin = 0
+  let grossLoss = 0
+  for (const t of tradePnl) {
+    if (t.pnl > 0) {
+      numWinners += 1
+      grossWin += t.pnl
+    } else if (t.pnl < 0) {
+      numLosers += 1
+      grossLoss += t.pnl
+    }
+  }
   const winRate = numClosed > 0 ? (numWinners / numClosed) * 100 : null
 
   const spy = result.spy_benchmark ?? null
@@ -115,6 +127,10 @@ export function computeMetrics(result) {
     spreadPct,
     taxPct,
     totalCostPct,
+    numWinners,
+    numLosers,
+    grossWin,
+    grossLoss,
     winRate,
     spyReturn,
     qqqReturn,

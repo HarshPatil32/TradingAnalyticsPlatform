@@ -21,6 +21,7 @@ export default function TradeReport({ result, onBack, isPro = false, onUpgrade, 
   const {
     numTrades, numClosed, openCount, openPositions, startDate, endDate,
     grossReturnPct, grossPnlUsd, netReturnPct, commissionsPct, slippagePct, spreadPct, taxPct, totalCostPct,
+    numWinners, numLosers, grossWin, grossLoss,
     winRate, spyReturn, qqqReturn,
     dispositionWarning, overtradingWarning, concentrationWarning, lowSampleWarning,
     avgWinnerDays, avgLoserDays, dispositionRatio,
@@ -75,6 +76,22 @@ export default function TradeReport({ result, onBack, isPro = false, onUpgrade, 
             />
             <StatCard label="SPY Same Period" value={fmtPct(spyReturn)} />
           </div>
+          {numClosed > 0 && (
+            <div className="border-t border-zinc-800 pt-6 mt-6 grid grid-cols-2 sm:grid-cols-4 gap-6">
+              <StatCard label="Winning Trades" value={numWinners} />
+              <StatCard label="Losing Trades" value={numLosers} />
+              <StatCard
+                label="Gross Win"
+                value={fmtUsd(grossWin)}
+                color={grossWin > 0 ? 'green' : undefined}
+              />
+              <StatCard
+                label="Gross Loss"
+                value={fmtUsd(grossLoss)}
+                color={grossLoss < 0 ? 'red' : undefined}
+              />
+            </div>
+          )}
         </div>
 
         <BenchmarkComparison

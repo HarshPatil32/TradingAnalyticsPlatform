@@ -100,6 +100,66 @@ describe('computeMetrics', () => {
     }))
     expect(metrics.grossPnlUsd).toBe(500)
   })
+
+  it('returns numWinners and numLosers', () => {
+    const metrics = computeMetrics(makeResult({
+      pnl: {
+        trade_pnl: [{ pnl: 100 }, { pnl: -50 }, { pnl: 0 }],
+        total_pnl: 50,
+        total_return_pct: 5,
+      },
+    }))
+    expect(metrics.numWinners).toBe(1)
+    expect(metrics.numLosers).toBe(1)
+  })
+
+  it('returns grossWin and grossLoss', () => {
+    const metrics = computeMetrics(makeResult({
+      pnl: {
+        trade_pnl: [{ pnl: 200 }, { pnl: 50 }, { pnl: -80 }],
+        total_pnl: 170,
+        total_return_pct: 17,
+      },
+    }))
+    expect(metrics.grossWin).toBe(250)
+    expect(metrics.grossLoss).toBe(-80)
+  })
+
+  it('returns zeros when no closed trades', () => {
+    const metrics = computeMetrics(makeResult())
+    expect(metrics.numWinners).toBe(0)
+    expect(metrics.numLosers).toBe(0)
+    expect(metrics.grossWin).toBe(0)
+    expect(metrics.grossLoss).toBe(0)
+  })
+
+  it('returns all winners when every trade is profitable', () => {
+    const metrics = computeMetrics(makeResult({
+      pnl: {
+        trade_pnl: [{ pnl: 100 }, { pnl: 50 }],
+        total_pnl: 150,
+        total_return_pct: 15,
+      },
+    }))
+    expect(metrics.numWinners).toBe(2)
+    expect(metrics.numLosers).toBe(0)
+    expect(metrics.grossWin).toBe(150)
+    expect(metrics.grossLoss).toBe(0)
+  })
+
+  it('returns all losers when every trade is unprofitable', () => {
+    const metrics = computeMetrics(makeResult({
+      pnl: {
+        trade_pnl: [{ pnl: -100 }, { pnl: -50 }],
+        total_pnl: -150,
+        total_return_pct: -15,
+      },
+    }))
+    expect(metrics.numWinners).toBe(0)
+    expect(metrics.numLosers).toBe(2)
+    expect(metrics.grossWin).toBe(0)
+    expect(metrics.grossLoss).toBe(-150)
+  })
 })
 
 describe('fmtUsd', () => {
@@ -213,6 +273,61 @@ describe('TradeReport', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade Now' }))
     expect(onUpgrade).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders win/loss counts and gross totals when there are closed trades', () => {
+    const result = makeResult({
+      pnl: {
+        trade_pnl: [{ pnl: 200 }, { pnl: -80 }],
+        total_pnl: 120,
+        total_return_pct: 12,
+      },
+    })
+    render(<TradeReport result={result} onBack={vi.fn()} />)
+    expect(screen.getByText('Winning Trades')).toBeInTheDocument()
+    expect(screen.getByText('Losing Trades')).toBeInTheDocument()
+    expect(screen.getByText('Gross Win')).toBeInTheDocument()
+    expect(screen.getByText('Gross Loss')).toBeInTheDocument()
+    expect(screen.getByText('Winning Trades').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Losing Trades').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('+$200.00')).toBeInTheDocument()
+    expect(screen.getByText('-$80.00')).toBeInTheDocument()
+    expect(screen.getByText('Gross Win').nextElementSibling).toHaveClass('text-green-400')
+    expect(screen.getByText('Gross Loss').nextElementSibling).toHaveClass('text-red-400')
+  })
+
+  it('renders zero gross win and gross loss without color classes', () => {
+    const result = makeResult({
+      pnl: {
+        trade_pnl: [{ pnl: -80 }],
+        total_pnl: -80,
+        total_return_pct: -8,
+      },
+    })
+    render(<TradeReport result={result} onBack={vi.fn()} />)
+    expect(screen.getByText('Gross Win').nextElementSibling).toHaveTextContent('+$0.00')
+    expect(screen.getByText('Gross Win').nextElementSibling).toHaveClass('text-white')
+    expect(screen.getByText('Gross Loss').nextElementSibling).toHaveTextContent('-$80.00')
+    expect(screen.getByText('Gross Loss').nextElementSibling).toHaveClass('text-red-400')
+  })
+
+  it('renders zero gross loss without red when all trades are winners', () => {
+    const result = makeResult({
+      pnl: {
+        trade_pnl: [{ pnl: 200 }],
+        total_pnl: 200,
+        total_return_pct: 20,
+      },
+    })
+    render(<TradeReport result={result} onBack={vi.fn()} />)
+    expect(screen.getByText('Gross Loss').nextElementSibling).toHaveTextContent('+$0.00')
+    expect(screen.getByText('Gross Loss').nextElementSibling).toHaveClass('text-white')
+    expect(screen.getByText('Gross Win').nextElementSibling).toHaveClass('text-green-400')
+  })
+
+  it('hides win/loss row when there are no closed trades', () => {
+    render(<TradeReport result={makeResult()} onBack={vi.fn()} />)
+    expect(screen.queryByText('Winning Trades')).not.toBeInTheDocument()
   })
 
   it('dismisses the upgrade block when Save These Results is clicked', () => {
