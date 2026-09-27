@@ -7,9 +7,12 @@ logger = logging.getLogger(__name__)
 
 # Default cost assumptions (all overridable via OptionsCostConfig)
 
-DEFAULT_OPTIONS_COMMISSION_PER_CONTRACT: float = (
-    0.00  # Commission in USD per contract per leg — $0 for commission-free brokers
-)
+# Per-contract commission (USD), charged on each trade leg (BTO, STC, etc.).
+# Default 0.00 matches mainstream commission-free retail (Robinhood, Webull).
+# Common paid-broker reference rates (override via commission_per_contract):
+#   tastytrade ~$0.50/contract (caps may apply on sell-to-close)
+#   Schwab / TD Ameritrade ~$0.65/contract
+DEFAULT_OPTIONS_COMMISSION_PER_CONTRACT: float = 0.00
 DEFAULT_OPTIONS_SLIPPAGE_PCT: float = 0.03  # 3% of premium per contract
 DEFAULT_OPTIONS_SPREAD_PCT: float = 0.05  # 5% round-trip of premium
 
@@ -47,7 +50,31 @@ def calculate_options_commissions(
     commission_per_contract: float = DEFAULT_OPTIONS_COMMISSION_PER_CONTRACT,
 ) -> dict:
     """Calculate total per-contract commission costs."""
-    raise NotImplementedError
+    if not isinstance(commission_per_contract, (int, float)) or commission_per_contract < 0:
+        raise ValueError(
+            f"commission_per_contract must be >= 0, got {commission_per_contract}"
+        )
+
+    if not trades:
+        return {
+            "total_commission_usd": 0.0,
+            "per_leg_avg_usd": 0.0,
+            "num_legs": 0,
+            "commission_rate": commission_per_contract,
+        }
+
+    total = 0.0
+    for raw in trades:
+        contracts = float(raw.get("contracts", 0) or 0)
+        total += commission_per_contract * contracts
+
+    num_legs = len(trades)
+    return {
+        "total_commission_usd": round(total, 4),
+        "per_leg_avg_usd": round(total / num_legs, 4),
+        "num_legs": num_legs,
+        "commission_rate": commission_per_contract,
+    }
 
 
 def calculate_options_regulatory_fees(trades: list[dict]) -> dict:

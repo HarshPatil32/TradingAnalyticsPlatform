@@ -31,7 +31,6 @@ class TestOptionsCostsSkeleton:
     @pytest.mark.parametrize(
         "func_name",
         [
-            "calculate_options_commissions",
             "calculate_options_regulatory_fees",
             "calculate_options_slippage",
             "calculate_options_bid_ask_spread",
