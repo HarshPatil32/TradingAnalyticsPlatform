@@ -27,6 +27,32 @@ DEFAULT_ORF_FEE_PER_CONTRACT: float = 0.01
 DEFAULT_SEC_FEE_RATE: float = 0.0000278  # sell-side only, per $ notional
 DEFAULT_FINRA_TAF_PER_CONTRACT: float = 0.00279  # sell-side only
 
+_SELL_SIDE_OPTION_ACTIONS = frozenset({"STO", "STC", "SELL"})
+
+
+def _validate_non_negative_rate(name: str, value: float) -> None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise ValueError(f"{name} must be >= 0, got {value}")
+
+
+def _float_from_trade_field(value: object | None, default: float = 0.0) -> float:
+    """Parse numeric trade fields; invalid or non-numeric values become ``default``."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return float(text)
+        except ValueError:
+            return default
+    return default
+
 
 # Configuration dataclass
 
@@ -50,10 +76,7 @@ def calculate_options_commissions(
     commission_per_contract: float = DEFAULT_OPTIONS_COMMISSION_PER_CONTRACT,
 ) -> dict:
     """Calculate total per-contract commission costs."""
-    if not isinstance(commission_per_contract, (int, float)) or commission_per_contract < 0:
-        raise ValueError(
-            f"commission_per_contract must be >= 0, got {commission_per_contract}"
-        )
+    _validate_non_negative_rate("commission_per_contract", commission_per_contract)
 
     if not trades:
         return {
@@ -65,7 +88,7 @@ def calculate_options_commissions(
 
     total = 0.0
     for raw in trades:
-        contracts = float(raw.get("contracts", 0) or 0)
+        contracts = _float_from_trade_field(raw.get("contracts", 0) or 0)
         total += commission_per_contract * contracts
 
     num_legs = len(trades)
@@ -77,13 +100,81 @@ def calculate_options_commissions(
     }
 
 
-def calculate_options_regulatory_fees(trades: list[dict]) -> dict:
+def calculate_options_regulatory_fees(
+    trades: list[dict],
+    occ_fee_per_contract: float = DEFAULT_OCC_CLEARING_FEE_PER_CONTRACT,
+    orf_fee_per_contract: float = DEFAULT_ORF_FEE_PER_CONTRACT,
+    sec_fee_rate: float = DEFAULT_SEC_FEE_RATE,
+    finra_taf_per_contract: float = DEFAULT_FINRA_TAF_PER_CONTRACT,
+) -> dict:
     """Calculate OCC clearing, ORF, SEC, and FINRA TAF fees.
 
     SEC and FINRA TAF apply on sell-side legs only; each trade's ``action``
-    field determines whether sell-side fees are charged.
+    field determines whether sell-side fees are charged. Default rates are
+    approximate placeholders; reconcile against current schedules before production use.
     """
-    raise NotImplementedError
+    _validate_non_negative_rate("occ_fee_per_contract", occ_fee_per_contract)
+    _validate_non_negative_rate("orf_fee_per_contract", orf_fee_per_contract)
+    _validate_non_negative_rate("sec_fee_rate", sec_fee_rate)
+    _validate_non_negative_rate("finra_taf_per_contract", finra_taf_per_contract)
+
+    rates_used = {
+        "occ_fee_per_contract": occ_fee_per_contract,
+        "orf_fee_per_contract": orf_fee_per_contract,
+        "sec_fee_rate": sec_fee_rate,
+        "finra_taf_per_contract": finra_taf_per_contract,
+    }
+
+    if not trades:
+        return {
+            "total_regulatory_fees_usd": 0.0,
+            "occ_clearing_usd": 0.0,
+            "orf_usd": 0.0,
+            "sec_fee_usd": 0.0,
+            "finra_taf_usd": 0.0,
+            "num_legs": 0,
+            "num_sell_legs": 0,
+            "rates_used": rates_used,
+        }
+
+    occ_total = 0.0
+    orf_total = 0.0
+    sec_total = 0.0
+    finra_total = 0.0
+    num_sell_legs = 0
+
+    for raw in trades:
+        contracts = _float_from_trade_field(raw.get("contracts", 0) or 0)
+        occ_total += occ_fee_per_contract * contracts
+        orf_total += orf_fee_per_contract * contracts
+
+        action = str(raw.get("action", "")).upper().strip()
+        if action in _SELL_SIDE_OPTION_ACTIONS:
+            num_sell_legs += 1
+            finra_total += finra_taf_per_contract * contracts
+            premium_raw = raw.get("premium")
+            if premium_raw is None or premium_raw == "":
+                premium_raw = raw.get("price")
+            premium = _float_from_trade_field(premium_raw, 0.0)
+            notional = abs(premium * contracts * 100)
+            sec_total += sec_fee_rate * notional
+
+    occ_clearing_usd = round(occ_total, 4)
+    orf_usd = round(orf_total, 4)
+    sec_fee_usd = round(sec_total, 4)
+    finra_taf_usd = round(finra_total, 4)
+    total = round(occ_total + orf_total + sec_total + finra_total, 4)
+
+    return {
+        "total_regulatory_fees_usd": total,
+        "occ_clearing_usd": occ_clearing_usd,
+        "orf_usd": orf_usd,
+        "sec_fee_usd": sec_fee_usd,
+        "finra_taf_usd": finra_taf_usd,
+        "num_legs": len(trades),
+        "num_sell_legs": num_sell_legs,
+        "rates_used": rates_used,
+    }
 
 
 def calculate_options_slippage(

@@ -66,6 +66,18 @@ def test_missing_contracts_field_treated_as_zero():
     assert result["num_legs"] == 2
 
 
+def test_non_numeric_contracts_treated_as_zero():
+    legs = [{"contracts": "bad", "action": "BTO"}]
+    result = calculate_options_commissions(legs, commission_per_contract=1.0)
+    assert result["total_commission_usd"] == 0.0
+    assert result["num_legs"] == 1
+
+
+def test_bool_commission_rate_raises():
+    with pytest.raises(ValueError, match="commission_per_contract must be >= 0"):
+        calculate_options_commissions([], commission_per_contract=True)
+
+
 def test_zero_contracts_on_leg_contributes_no_commission():
     legs = [
         {"contracts": 0, "action": "BTO"},
