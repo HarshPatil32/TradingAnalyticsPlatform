@@ -67,6 +67,20 @@ def test_price_fallback_used_when_premium_absent():
     assert result["total_slippage_usd"] == pytest.approx(0.03 * 325.0)
 
 
+def test_empty_string_premium_falls_back_to_price():
+    legs = [{"contracts": 1, "action": "BTO", "premium": "", "price": 3.25}]
+    result = calculate_options_slippage(legs, slippage_pct=0.03)
+    assert result["per_leg_breakdown"][0]["premium"] == pytest.approx(3.25)
+    assert result["total_slippage_usd"] == pytest.approx(0.03 * 325.0)
+
+
+def test_empty_string_premium_without_price_contributes_zero_slippage():
+    legs = [{"contracts": 2, "action": "BTO", "premium": ""}]
+    result = calculate_options_slippage(legs, slippage_pct=0.03)
+    assert result["total_slippage_usd"] == 0.0
+    assert result["per_leg_breakdown"][0]["slippage_usd"] == 0.0
+
+
 def test_negative_premium_uses_abs_notional():
     legs = [{"contracts": 2, "action": "BTO", "premium": -2.5}]
     result = calculate_options_slippage(legs, slippage_pct=0.03)

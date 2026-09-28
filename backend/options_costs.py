@@ -233,8 +233,52 @@ def calculate_options_bid_ask_spread(
     trades: list[dict],
     spread_pct: float = DEFAULT_OPTIONS_SPREAD_PCT,
 ) -> dict:
-    """Calculate round-trip bid-ask spread costs per contract."""
-    raise NotImplementedError
+    """Calculate round-trip bid-ask spread costs per contract.
+
+    Spread is modelled as spread_pct × (premium × contracts × 100).
+    Legs with missing or zero premium contribute zero spread cost.
+    """
+    _validate_non_negative_rate("spread_pct", spread_pct)
+    if spread_pct > 1:
+        raise ValueError(f"spread_pct must be <= 1, got {spread_pct}")
+
+    if not trades:
+        return {
+            "total_spread_usd": 0.0,
+            "per_leg_avg_usd": 0.0,
+            "num_legs": 0,
+            "spread_pct_used": spread_pct,
+            "per_leg_breakdown": [],
+        }
+
+    per_leg_breakdown = []
+    for raw in trades:
+        contracts = _float_from_trade_field(raw.get("contracts", 0) or 0)
+        premium_raw = raw.get("premium")
+        if premium_raw is None or premium_raw == "":
+            premium_raw = raw.get("price")
+        premium = _float_from_trade_field(premium_raw, 0.0)
+        notional = abs(premium * contracts * 100)
+        spread_usd = round(notional * spread_pct, 4) if notional > 0 else 0.0
+        per_leg_breakdown.append(
+            {
+                "action": str(raw.get("action", "")).upper().strip(),
+                "contracts": contracts,
+                "premium": premium,
+                "notional_usd": round(notional, 4),
+                "spread_usd": spread_usd,
+            }
+        )
+
+    total = round(sum(e["spread_usd"] for e in per_leg_breakdown), 4)
+    num_legs = len(trades)
+    return {
+        "total_spread_usd": total,
+        "per_leg_avg_usd": round(total / num_legs, 4),
+        "num_legs": num_legs,
+        "spread_pct_used": spread_pct,
+        "per_leg_breakdown": per_leg_breakdown,
+    }
 
 
 def calculate_options_real_costs(

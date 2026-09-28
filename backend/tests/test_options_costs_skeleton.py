@@ -28,17 +28,6 @@ class TestOptionsCostsSkeleton:
         assert config.spread_pct == options_costs.DEFAULT_OPTIONS_SPREAD_PCT
         assert config.apply_regulatory_fees is True
 
-    @pytest.mark.parametrize(
-        "func_name",
-        [
-            "calculate_options_bid_ask_spread",
-            "calculate_options_real_costs",
-        ],
-    )
-    def test_public_stubs_raise_not_implemented(self, func_name):
-        func = getattr(options_costs, func_name)
+    def test_calculate_options_real_costs_raises_not_implemented(self):
         with pytest.raises(NotImplementedError):
-            if func_name == "calculate_options_real_costs":
-                func([], 10_000.0)
-            else:
-                func([])
+            options_costs.calculate_options_real_costs([], 10_000.0)
