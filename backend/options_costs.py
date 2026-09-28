@@ -181,8 +181,52 @@ def calculate_options_slippage(
     trades: list[dict],
     slippage_pct: float = DEFAULT_OPTIONS_SLIPPAGE_PCT,
 ) -> dict:
-    """Calculate market-impact / slippage costs per contract."""
-    raise NotImplementedError
+    """Calculate market-impact / slippage costs per contract.
+
+    Slippage is modelled as slippage_pct × (premium × contracts × 100).
+    Legs with missing or zero premium contribute zero slippage.
+    """
+    _validate_non_negative_rate("slippage_pct", slippage_pct)
+    if slippage_pct > 1:
+        raise ValueError(f"slippage_pct must be <= 1, got {slippage_pct}")
+
+    if not trades:
+        return {
+            "total_slippage_usd": 0.0,
+            "per_leg_avg_usd": 0.0,
+            "num_legs": 0,
+            "slippage_pct_used": slippage_pct,
+            "per_leg_breakdown": [],
+        }
+
+    per_leg_breakdown = []
+    for raw in trades:
+        contracts = _float_from_trade_field(raw.get("contracts", 0) or 0)
+        premium_raw = raw.get("premium")
+        if premium_raw is None or premium_raw == "":
+            premium_raw = raw.get("price")
+        premium = _float_from_trade_field(premium_raw, 0.0)
+        notional = abs(premium * contracts * 100)
+        slippage_usd = round(notional * slippage_pct, 4) if notional > 0 else 0.0
+        per_leg_breakdown.append(
+            {
+                "action": str(raw.get("action", "")).upper().strip(),
+                "contracts": contracts,
+                "premium": premium,
+                "notional_usd": round(notional, 4),
+                "slippage_usd": slippage_usd,
+            }
+        )
+
+    total = round(sum(e["slippage_usd"] for e in per_leg_breakdown), 4)
+    num_legs = len(trades)
+    return {
+        "total_slippage_usd": total,
+        "per_leg_avg_usd": round(total / num_legs, 4),
+        "num_legs": num_legs,
+        "slippage_pct_used": slippage_pct,
+        "per_leg_breakdown": per_leg_breakdown,
+    }
 
 
 def calculate_options_bid_ask_spread(
