@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -278,6 +279,73 @@ def calculate_options_bid_ask_spread(
         "num_legs": num_legs,
         "spread_pct_used": spread_pct,
         "per_leg_breakdown": per_leg_breakdown,
+    }
+
+
+def _finite_usd_from_value(value: object, default: float = 0.0) -> float:
+    """Parse a numeric USD field; bool/invalid/non-finite values become 0.0."""
+    parsed = _float_from_trade_field(value, default)
+    if not math.isfinite(parsed):
+        return 0.0
+    return parsed
+
+
+def _safe_cost_usd(d: object, key: str) -> float:
+    """Read a USD total from a cost component dict; invalid values become 0.0."""
+    if not isinstance(d, dict):
+        return 0.0
+    return _finite_usd_from_value(d.get(key, 0.0))
+
+
+def _safe_gross_profit_usd(pnl_data: object) -> float:
+    if not isinstance(pnl_data, dict):
+        return 0.0
+    return _finite_usd_from_value(pnl_data.get("total_pnl", 0.0))
+
+
+def aggregate_options_total_costs(
+    pnl_data: dict,
+    commissions: dict,
+    slippage: dict,
+    bid_ask_spread: dict,
+    *,
+    regulatory_fees: dict | None = None,
+) -> dict:
+    commission_usd = _safe_cost_usd(commissions, "total_commission_usd")
+    slippage_usd = _safe_cost_usd(slippage, "total_slippage_usd")
+    spread_usd = _safe_cost_usd(bid_ask_spread, "total_spread_usd")
+    regulatory_usd = (
+        _safe_cost_usd(regulatory_fees, "total_regulatory_fees_usd")
+        if regulatory_fees is not None
+        else 0.0
+    )
+
+    gross_profit_usd = _safe_gross_profit_usd(pnl_data)
+    total_costs_usd = round(
+        commission_usd + slippage_usd + spread_usd + regulatory_usd, 4
+    )
+
+    if gross_profit_usd > 0:
+        cost_drag_pct = round(total_costs_usd / gross_profit_usd, 4)
+    else:
+        cost_drag_pct = None
+
+    trade_pnl = pnl_data.get("trade_pnl") if isinstance(pnl_data, dict) else None
+    if not isinstance(trade_pnl, list):
+        trade_pnl = []
+    num_closed_trades = len(trade_pnl)
+
+    return {
+        "total_costs_usd": total_costs_usd,
+        "cost_drag_pct": cost_drag_pct,
+        "gross_profit_usd": gross_profit_usd,
+        "num_closed_trades": num_closed_trades,
+        "components_usd": {
+            "commission": round(commission_usd, 4),
+            "slippage": round(slippage_usd, 4),
+            "spread": round(spread_usd, 4),
+            "regulatory_fees": round(regulatory_usd, 4),
+        },
     }
 
 
