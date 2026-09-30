@@ -27,6 +27,16 @@ class TestOptionsCostsSkeleton:
         assert config.slippage_pct == options_costs.DEFAULT_OPTIONS_SLIPPAGE_PCT
         assert config.spread_pct == options_costs.DEFAULT_OPTIONS_SPREAD_PCT
         assert config.apply_regulatory_fees is True
+        assert (
+            config.occ_fee_per_contract
+            == options_costs.DEFAULT_OCC_CLEARING_FEE_PER_CONTRACT
+        )
+        assert config.orf_fee_per_contract == options_costs.DEFAULT_ORF_FEE_PER_CONTRACT
+        assert config.sec_fee_rate == options_costs.DEFAULT_SEC_FEE_RATE
+        assert (
+            config.finra_taf_per_contract
+            == options_costs.DEFAULT_FINRA_TAF_PER_CONTRACT
+        )
 
     def test_calculate_options_real_costs_raises_not_implemented(self):
         with pytest.raises(NotImplementedError):

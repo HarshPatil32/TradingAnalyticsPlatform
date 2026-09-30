@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,10 @@ DEFAULT_OCC_CLEARING_FEE_PER_CONTRACT: float = 0.02
 DEFAULT_ORF_FEE_PER_CONTRACT: float = 0.01
 DEFAULT_SEC_FEE_RATE: float = 0.0000278  # sell-side only, per $ notional
 DEFAULT_FINRA_TAF_PER_CONTRACT: float = 0.00279  # sell-side only
+
+# Upper bounds for request-body overrides (trust boundary; normal brokers stay well below).
+_MAX_COMMISSION_OR_FEE_PER_CONTRACT: float = 1000.0
+_MAX_SEC_FEE_RATE: float = 1.0
 
 _SELL_SIDE_OPTION_ACTIONS = frozenset({"STO", "STC", "SELL"})
 
@@ -60,16 +65,121 @@ def _float_from_trade_field(value: object | None, default: float = 0.0) -> float
 
 @dataclass
 class OptionsCostConfig:
-    """Holds tunable options cost parameters.
-
-    Individual regulatory fee rates are not yet configurable here; EPIC 9.6
-    will add per-fee overrides when request-body config is implemented.
-    """
+    """Holds tunable options cost parameters (defaults or request-body overrides)."""
 
     commission_per_contract: float = DEFAULT_OPTIONS_COMMISSION_PER_CONTRACT
     slippage_pct: float = DEFAULT_OPTIONS_SLIPPAGE_PCT
     spread_pct: float = DEFAULT_OPTIONS_SPREAD_PCT
     apply_regulatory_fees: bool = True
+    occ_fee_per_contract: float = DEFAULT_OCC_CLEARING_FEE_PER_CONTRACT
+    orf_fee_per_contract: float = DEFAULT_ORF_FEE_PER_CONTRACT
+    sec_fee_rate: float = DEFAULT_SEC_FEE_RATE
+    finra_taf_per_contract: float = DEFAULT_FINRA_TAF_PER_CONTRACT
+
+
+def _parse_request_non_negative_float(
+    raw: Mapping[str, object],
+    key: str,
+    default: float,
+    *,
+    max_value: float | None = None,
+    max_one: bool = False,
+) -> float:
+    if key not in raw:
+        return default
+    value = raw[key]
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise ValueError(f"{key} must be a number.")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{key} must be a number.") from None
+    if not math.isfinite(parsed):
+        raise ValueError(f"{key} must be a number.")
+    if parsed < 0:
+        raise ValueError(f"{key} must be a non-negative number.")
+    if max_one and parsed > 1:
+        raise ValueError(f"{key} must be <= 1.")
+    if max_value is not None and parsed > max_value:
+        raise ValueError(f"{key} must be at most {max_value}.")
+    return parsed
+
+
+def _parse_request_bool(
+    raw: Mapping[str, object],
+    key: str,
+    default: bool,
+) -> bool:
+    if key not in raw:
+        return default
+    value = raw[key]
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean.")
+    return value
+
+
+def options_cost_config_from_request(
+    raw: Mapping[str, object] | None,
+) -> OptionsCostConfig:
+    """Build ``OptionsCostConfig`` from JSON or multipart form fields."""
+    if raw is None:
+        return OptionsCostConfig()
+    if not isinstance(raw, Mapping):
+        raise ValueError("cost configuration must be an object.")
+    if not raw:
+        return OptionsCostConfig()
+
+    return OptionsCostConfig(
+        commission_per_contract=_parse_request_non_negative_float(
+            raw,
+            "commission_per_contract",
+            DEFAULT_OPTIONS_COMMISSION_PER_CONTRACT,
+            max_value=_MAX_COMMISSION_OR_FEE_PER_CONTRACT,
+        ),
+        slippage_pct=_parse_request_non_negative_float(
+            raw,
+            "slippage_pct",
+            DEFAULT_OPTIONS_SLIPPAGE_PCT,
+            max_one=True,
+        ),
+        spread_pct=_parse_request_non_negative_float(
+            raw,
+            "spread_pct",
+            DEFAULT_OPTIONS_SPREAD_PCT,
+            max_one=True,
+        ),
+        apply_regulatory_fees=_parse_request_bool(
+            raw, "apply_regulatory_fees", True
+        ),
+        occ_fee_per_contract=_parse_request_non_negative_float(
+            raw,
+            "occ_fee_per_contract",
+            DEFAULT_OCC_CLEARING_FEE_PER_CONTRACT,
+            max_value=_MAX_COMMISSION_OR_FEE_PER_CONTRACT,
+        ),
+        orf_fee_per_contract=_parse_request_non_negative_float(
+            raw,
+            "orf_fee_per_contract",
+            DEFAULT_ORF_FEE_PER_CONTRACT,
+            max_value=_MAX_COMMISSION_OR_FEE_PER_CONTRACT,
+        ),
+        sec_fee_rate=_parse_request_non_negative_float(
+            raw,
+            "sec_fee_rate",
+            DEFAULT_SEC_FEE_RATE,
+            max_value=_MAX_SEC_FEE_RATE,
+        ),
+        finra_taf_per_contract=_parse_request_non_negative_float(
+            raw,
+            "finra_taf_per_contract",
+            DEFAULT_FINRA_TAF_PER_CONTRACT,
+            max_value=_MAX_COMMISSION_OR_FEE_PER_CONTRACT,
+        ),
+    )
 
 
 def calculate_options_commissions(
