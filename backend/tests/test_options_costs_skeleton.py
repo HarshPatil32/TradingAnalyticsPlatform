@@ -27,21 +27,17 @@ class TestOptionsCostsSkeleton:
         assert config.slippage_pct == options_costs.DEFAULT_OPTIONS_SLIPPAGE_PCT
         assert config.spread_pct == options_costs.DEFAULT_OPTIONS_SPREAD_PCT
         assert config.apply_regulatory_fees is True
+        assert (
+            config.occ_fee_per_contract
+            == options_costs.DEFAULT_OCC_CLEARING_FEE_PER_CONTRACT
+        )
+        assert config.orf_fee_per_contract == options_costs.DEFAULT_ORF_FEE_PER_CONTRACT
+        assert config.sec_fee_rate == options_costs.DEFAULT_SEC_FEE_RATE
+        assert (
+            config.finra_taf_per_contract
+            == options_costs.DEFAULT_FINRA_TAF_PER_CONTRACT
+        )
 
-    @pytest.mark.parametrize(
-        "func_name",
-        [
-            "calculate_options_commissions",
-            "calculate_options_regulatory_fees",
-            "calculate_options_slippage",
-            "calculate_options_bid_ask_spread",
-            "calculate_options_real_costs",
-        ],
-    )
-    def test_public_stubs_raise_not_implemented(self, func_name):
-        func = getattr(options_costs, func_name)
+    def test_calculate_options_real_costs_raises_not_implemented(self):
         with pytest.raises(NotImplementedError):
-            if func_name == "calculate_options_real_costs":
-                func([], 10_000.0)
-            else:
-                func([])
+            options_costs.calculate_options_real_costs([], 10_000.0)
