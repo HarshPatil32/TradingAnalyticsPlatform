@@ -413,6 +413,34 @@ def _safe_gross_profit_usd(pnl_data: object) -> float:
     return _finite_usd_from_value(pnl_data.get("total_pnl", 0.0))
 
 
+def _validate_positive_account_size(account_size: float) -> None:
+    if isinstance(account_size, bool) or not isinstance(account_size, (int, float)):
+        raise ValueError("account_size must be a positive number.")
+    if not math.isfinite(account_size) or account_size <= 0:
+        raise ValueError("account_size must be a positive number.")
+
+
+def calculate_options_after_cost_return(
+    gross_profit_usd: float,
+    total_costs_usd: float,
+    account_size: float,
+) -> dict[str, float]:
+    """Gross P&L and return pct minus trading costs only (no tax)."""
+    _validate_positive_account_size(account_size)
+    gross = _finite_usd_from_value(gross_profit_usd)
+    costs = _finite_usd_from_value(total_costs_usd)
+    after_costs_profit_usd = gross - costs
+    gross_return_pct = gross / account_size * 100
+    total_cost_pct = costs / account_size * 100
+    after_costs_pct = gross_return_pct - total_cost_pct
+    return {
+        "gross_return_pct": round(gross_return_pct, 4),
+        "total_costs_pct": round(total_cost_pct, 4),
+        "after_costs_profit_usd": round(after_costs_profit_usd, 4),
+        "after_costs_pct": round(after_costs_pct, 4),
+    }
+
+
 def aggregate_options_total_costs(
     pnl_data: dict,
     commissions: dict,
@@ -420,6 +448,7 @@ def aggregate_options_total_costs(
     bid_ask_spread: dict,
     *,
     regulatory_fees: dict | None = None,
+    account_size: float | None = None,
 ) -> dict:
     commission_usd = _safe_cost_usd(commissions, "total_commission_usd")
     slippage_usd = _safe_cost_usd(slippage, "total_slippage_usd")
@@ -445,7 +474,7 @@ def aggregate_options_total_costs(
         trade_pnl = []
     num_closed_trades = len(trade_pnl)
 
-    return {
+    result: dict = {
         "total_costs_usd": total_costs_usd,
         "cost_drag_pct": cost_drag_pct,
         "gross_profit_usd": gross_profit_usd,
@@ -457,6 +486,13 @@ def aggregate_options_total_costs(
             "regulatory_fees": round(regulatory_usd, 4),
         },
     }
+    if account_size is not None:
+        result.update(
+            calculate_options_after_cost_return(
+                gross_profit_usd, total_costs_usd, account_size
+            )
+        )
+    return result
 
 
 def calculate_options_real_costs(

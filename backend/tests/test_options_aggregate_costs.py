@@ -2,6 +2,8 @@
 
 import math
 
+import pytest
+
 import options_costs
 
 COMMISSIONS = {"total_commission_usd": 5.0}
@@ -197,3 +199,78 @@ class TestAggregateOptionsTotalCostsIntegration:
         )
         assert result["total_costs_usd"] == round(expected_total, 4)
         assert result["cost_drag_pct"] == round(expected_total / 200.0, 4)
+
+
+ACCOUNT_SIZE = 10_000.0
+
+
+class TestCalculateOptionsAfterCostReturn:
+    def test_after_costs_profit_equals_gross_minus_costs(self):
+        adj = options_costs.calculate_options_after_cost_return(500.0, 50.0, ACCOUNT_SIZE)
+        assert adj["after_costs_profit_usd"] == pytest.approx(450.0)
+
+    def test_after_costs_pct_consistent_with_usd(self):
+        adj = options_costs.calculate_options_after_cost_return(500.0, 50.0, ACCOUNT_SIZE)
+        expected_pct = adj["after_costs_profit_usd"] / ACCOUNT_SIZE * 100
+        assert adj["after_costs_pct"] == pytest.approx(expected_pct, rel=1e-5)
+
+    def test_zero_costs_matches_gross(self):
+        adj = options_costs.calculate_options_after_cost_return(500.0, 0.0, ACCOUNT_SIZE)
+        assert adj["after_costs_pct"] == pytest.approx(adj["gross_return_pct"])
+        assert adj["after_costs_profit_usd"] == pytest.approx(500.0)
+
+    def test_costs_reduce_return_when_gross_positive(self):
+        adj = options_costs.calculate_options_after_cost_return(500.0, 50.0, ACCOUNT_SIZE)
+        assert adj["after_costs_pct"] < adj["gross_return_pct"]
+
+    def test_negative_gross_subtracts_costs(self):
+        adj = options_costs.calculate_options_after_cost_return(-100.0, 15.0, ACCOUNT_SIZE)
+        assert adj["after_costs_profit_usd"] == pytest.approx(-115.0)
+        assert adj["gross_return_pct"] == pytest.approx(-1.0, rel=1e-5)
+        assert adj["after_costs_pct"] == pytest.approx(-1.15, rel=1e-5)
+
+    @pytest.mark.parametrize(
+        "bad_size",
+        [0, -1.0, math.nan, math.inf, True, "10000", None],
+    )
+    def test_invalid_account_size_raises(self, bad_size):
+        with pytest.raises(ValueError, match="account_size"):
+            options_costs.calculate_options_after_cost_return(100.0, 10.0, bad_size)
+
+
+class TestAggregateOptionsAfterCostReturn:
+    def test_omitted_account_size_has_no_return_fields(self):
+        result = options_costs.aggregate_options_total_costs(
+            _pnl(50.0), COMMISSIONS, SLIPPAGE, SPREAD
+        )
+        for key in (
+            "gross_return_pct",
+            "total_costs_pct",
+            "after_costs_profit_usd",
+            "after_costs_pct",
+        ):
+            assert key not in result
+
+    def test_with_account_size_includes_after_cost_fields(self):
+        result = options_costs.aggregate_options_total_costs(
+            _pnl(50.0),
+            COMMISSIONS,
+            SLIPPAGE,
+            SPREAD,
+            account_size=ACCOUNT_SIZE,
+        )
+        assert result["gross_return_pct"] == pytest.approx(0.5, rel=1e-5)
+        assert result["total_costs_pct"] == pytest.approx(0.15, rel=1e-5)
+        assert result["after_costs_profit_usd"] == pytest.approx(35.0)
+        assert result["after_costs_pct"] == pytest.approx(0.35, rel=1e-5)
+
+    @pytest.mark.parametrize("bad_size", [0, True, "10000"])
+    def test_invalid_account_size_raises(self, bad_size):
+        with pytest.raises(ValueError, match="account_size"):
+            options_costs.aggregate_options_total_costs(
+                _pnl(50.0),
+                COMMISSIONS,
+                SLIPPAGE,
+                SPREAD,
+                account_size=bad_size,
+            )
