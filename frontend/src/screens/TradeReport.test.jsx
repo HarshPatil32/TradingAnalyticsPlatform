@@ -52,6 +52,48 @@ describe('computeMetrics', () => {
     expect(metrics.concentrationWarning).toEqual(warning)
   })
 
+  it('extracts lowSampleWarning for insufficient_trade_count', () => {
+    const warning = {
+      type: 'insufficient_trade_count',
+      level: 'warning',
+      message:
+        'Only 5 closed trade(s) found. At least 30 closed trades are needed to draw reliable conclusions.',
+      count: 5,
+    }
+    const metrics = computeMetrics(makeResult({ warnings: [warning] }))
+    expect(metrics.lowSampleWarning).toEqual(warning)
+  })
+
+  it('extracts lowSampleWarning for legacy insufficient_data type', () => {
+    const warning = {
+      type: 'insufficient_data',
+      level: 'warning',
+      message: 'Low sample',
+    }
+    const metrics = computeMetrics(makeResult({ warnings: [warning] }))
+    expect(metrics.lowSampleWarning).toEqual(warning)
+  })
+
+  it('does not match lowSampleWarning by message substring alone', () => {
+    const warning = {
+      type: 'low_trades',
+      level: 'warning',
+      message: 'Too few trades for reliable conclusions.',
+    }
+    const metrics = computeMetrics(makeResult({ warnings: [warning] }))
+    expect(metrics.lowSampleWarning).toBeNull()
+  })
+
+  it('does not treat overtrading as lowSampleWarning', () => {
+    const warning = {
+      type: 'overtrading',
+      level: 'warning',
+      message: 'High trade frequency detected.',
+    }
+    const metrics = computeMetrics(makeResult({ warnings: [warning] }))
+    expect(metrics.lowSampleWarning).toBeNull()
+  })
+
   it('handles empty notices array', () => {
     const metrics = computeMetrics(makeResult({ notices: [] }))
     expect(metrics.openCount).toBe(0)

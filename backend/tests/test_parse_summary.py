@@ -3,6 +3,10 @@
 import pytest
 
 from csv_analyzer import analyze_uploaded_trades, parse_summary
+from transaction_costs import (
+    MIN_CLOSED_TRADES_FOR_CONCLUSIONS,
+    check_trade_count_sufficiency,
+)
 
 VALID_CSV = (
     "initial_capital,final_balance,num_trades,win_rate,start_date,end_date\n"
@@ -218,6 +222,46 @@ class TestParseSummaryMultipleRows:
         )
         with pytest.raises(ValueError, match="exactly one data row"):
             parse_summary(csv_data)
+
+
+class TestCheckTradeCountSufficiency:
+    @pytest.mark.parametrize("count", [0, 1, 29])
+    def test_returns_warning_below_threshold(self, count):
+        warning = check_trade_count_sufficiency(count)
+        assert warning is not None
+        assert warning["type"] == "insufficient_trade_count"
+        assert warning["level"] == "warning"
+        assert warning["count"] == count
+        assert str(MIN_CLOSED_TRADES_FOR_CONCLUSIONS) in warning["message"]
+
+    @pytest.mark.parametrize("count", [30, 31])
+    def test_returns_none_at_or_above_threshold(self, count):
+        assert check_trade_count_sufficiency(count) is None
+
+
+def _summary_csv(num_trades: int) -> str:
+    return (
+        "initial_capital,final_balance,num_trades,win_rate,start_date,end_date\n"
+        f"10000,12000,{num_trades},0.6,2024-01-01,2024-12-31\n"
+    )
+
+
+class TestSummaryTradeCountSufficiencyWarning:
+    def test_fewer_than_30_trades_warns(self):
+        result = analyze_uploaded_trades(_summary_csv(5))
+        warning = next(
+            (w for w in result["warnings"] if w["type"] == "insufficient_trade_count"),
+            None,
+        )
+        assert warning is not None
+        assert warning["count"] == 5
+
+    @pytest.mark.parametrize("num_trades", [30, 31])
+    def test_30_or_more_trades_no_warn(self, num_trades):
+        result = analyze_uploaded_trades(_summary_csv(num_trades))
+        assert not any(
+            w["type"] == "insufficient_trade_count" for w in result["warnings"]
+        )
 
 
 class TestParseSummaryIntegration:
