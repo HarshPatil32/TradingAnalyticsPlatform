@@ -92,10 +92,18 @@ def _parse_request_non_negative_float(
         return default
     if isinstance(value, bool):
         raise ValueError(f"{key} must be a number.")
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError, OverflowError):
-        raise ValueError(f"{key} must be a number.") from None
+    if isinstance(value, (int, float)):
+        try:
+            parsed = float(value)
+        except OverflowError:
+            raise ValueError(f"{key} must be a number.") from None
+    elif isinstance(value, str):
+        try:
+            parsed = float(value)
+        except ValueError:
+            raise ValueError(f"{key} must be a number.") from None
+    else:
+        raise ValueError(f"{key} must be a number.")
     if not math.isfinite(parsed):
         raise ValueError(f"{key} must be a number.")
     if parsed < 0:
@@ -152,9 +160,7 @@ def options_cost_config_from_request(
             DEFAULT_OPTIONS_SPREAD_PCT,
             max_one=True,
         ),
-        apply_regulatory_fees=_parse_request_bool(
-            raw, "apply_regulatory_fees", True
-        ),
+        apply_regulatory_fees=_parse_request_bool(raw, "apply_regulatory_fees", True),
         occ_fee_per_contract=_parse_request_non_negative_float(
             raw,
             "occ_fee_per_contract",
@@ -310,7 +316,8 @@ def calculate_options_slippage(
             "per_leg_breakdown": [],
         }
 
-    per_leg_breakdown = []
+    per_leg_breakdown: list[dict[str, float | str]] = []
+    slippage_by_leg: list[float] = []
     for raw in trades:
         contracts = _float_from_trade_field(raw.get("contracts", 0) or 0)
         premium_raw = raw.get("premium")
@@ -319,6 +326,7 @@ def calculate_options_slippage(
         premium = _float_from_trade_field(premium_raw, 0.0)
         notional = abs(premium * contracts * 100)
         slippage_usd = round(notional * slippage_pct, 4) if notional > 0 else 0.0
+        slippage_by_leg.append(slippage_usd)
         per_leg_breakdown.append(
             {
                 "action": str(raw.get("action", "")).upper().strip(),
@@ -329,7 +337,7 @@ def calculate_options_slippage(
             }
         )
 
-    total = round(sum(e["slippage_usd"] for e in per_leg_breakdown), 4)
+    total = round(sum(slippage_by_leg), 4)
     num_legs = len(trades)
     return {
         "total_slippage_usd": total,
@@ -362,7 +370,8 @@ def calculate_options_bid_ask_spread(
             "per_leg_breakdown": [],
         }
 
-    per_leg_breakdown = []
+    per_leg_breakdown: list[dict[str, float | str]] = []
+    spread_by_leg: list[float] = []
     for raw in trades:
         contracts = _float_from_trade_field(raw.get("contracts", 0) or 0)
         premium_raw = raw.get("premium")
@@ -371,6 +380,7 @@ def calculate_options_bid_ask_spread(
         premium = _float_from_trade_field(premium_raw, 0.0)
         notional = abs(premium * contracts * 100)
         spread_usd = round(notional * spread_pct, 4) if notional > 0 else 0.0
+        spread_by_leg.append(spread_usd)
         per_leg_breakdown.append(
             {
                 "action": str(raw.get("action", "")).upper().strip(),
@@ -381,7 +391,7 @@ def calculate_options_bid_ask_spread(
             }
         )
 
-    total = round(sum(e["spread_usd"] for e in per_leg_breakdown), 4)
+    total = round(sum(spread_by_leg), 4)
     num_legs = len(trades)
     return {
         "total_spread_usd": total,

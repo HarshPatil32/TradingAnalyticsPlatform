@@ -76,8 +76,7 @@ export function computeMetrics(result) {
   const lowSampleWarning =
     warnings.find(
       (w) =>
-        w.type === 'insufficient_data' ||
-        (w.message && w.message.includes('reliable conclusions'))
+        w.type === 'insufficient_trade_count' || w.type === 'insufficient_data'
     ) ?? null
 
   const significance = result.significance ?? null

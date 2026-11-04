@@ -60,6 +60,8 @@ from csv_analyzer import (
 from csv_analyzer import (
     parse_summary as _parse_stock_summary,
 )
+from statistical_tests import run_significance_tests
+from transaction_costs import MIN_CLOSED_TRADES_FOR_CONCLUSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -567,6 +569,108 @@ def validate_options(trades: list[dict]) -> list[dict]:
             )
 
     return warnings
+
+
+def _finite_pnl_from_trade_entry(entry: object) -> float | None:
+    """Return finite P&L from a closed-position dict, or None if invalid."""
+    if not isinstance(entry, dict):
+        return None
+    value = entry.get("pnl")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = float(text)
+        except ValueError:
+            return None
+    else:
+        return None
+    if not math.isfinite(parsed):
+        return None
+    return parsed
+
+
+def _wilson_interval_pct(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval for a binomial proportion, as percentages."""
+    if n <= 0:
+        return (0.0, 0.0)
+    p_hat = wins / n
+    z2 = z * z
+    denom = 1.0 + z2 / n
+    center = (p_hat + z2 / (2.0 * n)) / denom
+    margin = (z / denom) * math.sqrt(p_hat * (1.0 - p_hat) / n + z2 / (4.0 * n * n))
+    lo = max(0.0, min(100.0, round((center - margin) * 100.0, 2)))
+    hi = max(0.0, min(100.0, round((center + margin) * 100.0, 2)))
+    return (lo, hi)
+
+
+def calculate_options_win_rate(trade_pnl: list[dict]) -> dict:
+    """Win rate for closed options positions with a minimum-sample guard."""
+    min_sample = MIN_CLOSED_TRADES_FOR_CONCLUSIONS
+    wins = 0
+    n = 0
+    for entry in trade_pnl:
+        pnl = _finite_pnl_from_trade_entry(entry)
+        if pnl is None:
+            continue
+        n += 1
+        if pnl > 0:
+            wins += 1
+
+    sufficient = n >= min_sample
+    base = {
+        "num_closed_positions": n,
+        "num_winning_positions": wins,
+        "min_sample_size": min_sample,
+        "sufficient_sample": sufficient,
+        "win_rate_pct": None,
+        "confidence_interval_pct": None,
+    }
+
+    if not sufficient:
+        if n == 0:
+            message = (
+                f"No closed positions were found. At least {min_sample} are "
+                "recommended before a win rate is meaningful."
+            )
+        else:
+            winner_label = "winner" if wins == 1 else "winners"
+            message = (
+                f"Only {n} closed position{'s' if n != 1 else ''} ({wins} {winner_label}). "
+                f"At least {min_sample} are recommended before a win rate is meaningful."
+            )
+        return {**base, "message": message}
+
+    win_rate_pct = round(wins / n * 100.0, 4)
+    lo, hi = _wilson_interval_pct(wins, n)
+    winner_label = "winner" if wins == 1 else "winners"
+    position_label = "position" if n == 1 else "positions"
+    return {
+        **base,
+        "win_rate_pct": win_rate_pct,
+        "confidence_interval_pct": [lo, hi],
+        "message": (
+            f"{n} closed {position_label} ({wins} {winner_label}), "
+            "enough for a win rate figure."
+        ),
+    }
+
+
+def calculate_options_significance(trade_pnl: list[dict]) -> dict | None:
+    """Run significance tests on closed-position P&L (same shape as stock ``significance``)."""
+    values: list[float] = []
+    for entry in trade_pnl:
+        pnl = _finite_pnl_from_trade_entry(entry)
+        if pnl is not None:
+            values.append(pnl)
+    if not values:
+        return None
+    return run_significance_tests(values)
 
 
 def calculate_options_pnl(trades: list[dict]) -> dict:

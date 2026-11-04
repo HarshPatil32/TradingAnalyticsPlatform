@@ -89,11 +89,15 @@ class TestOptionsCostConfigFromRequestOverrides:
 
     def test_slippage_boundary_zero_and_one(self):
         assert (
-            options_costs.options_cost_config_from_request({"slippage_pct": 0}).slippage_pct
+            options_costs.options_cost_config_from_request(
+                {"slippage_pct": 0}
+            ).slippage_pct
             == 0.0
         )
         assert (
-            options_costs.options_cost_config_from_request({"slippage_pct": 1}).slippage_pct
+            options_costs.options_cost_config_from_request(
+                {"slippage_pct": 1}
+            ).slippage_pct
             == 1.0
         )
 
@@ -171,8 +175,8 @@ class TestOptionsCostConfigFromRequestRejections:
 
     def test_non_mapping_rejected(self):
         with pytest.raises(ValueError, match="must be an object"):
-            options_costs.options_cost_config_from_request([1, 2])  # type: ignore[arg-type]
+            options_costs.options_cost_config_from_request([1, 2])
 
     def test_empty_list_rejected_not_silent_default(self):
         with pytest.raises(ValueError, match="must be an object"):
-            options_costs.options_cost_config_from_request([])  # type: ignore[arg-type]
+            options_costs.options_cost_config_from_request([])
